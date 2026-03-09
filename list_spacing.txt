@@ -1,0 +1,16 @@
+        // Add spacing for list items (li tags) - more space between bullet points
+        $bodyContent = preg_replace_callback('/<li([^>]*)>/i', function ($matches) {
+            $attributes = $matches[1];
+
+            // Check if style attribute already exists
+            if (preg_match('/style=["\']([^"\']*)["\']/', $attributes, $styleMatch)) {
+                $existingStyle = $styleMatch[1];
+                // Add margin-bottom for spacing between list items
+                $newStyle = $existingStyle . '; margin-bottom: 8px; line-height: 1.2;';
+                return '<li' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
+            } else {
+                // Add new style attribute with spacing
+                return '<li' . $attributes . ' style="margin-bottom: 8px; line-height: 1.2;">';
+            }
+        }, $bodyContent);
+

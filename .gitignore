@@ -1,0 +1,24 @@
+# Composer dependencies
+/vendor/
+
+# Environment files
+.env
+
+# IDE/editor settings
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache
+/writable/cache/
+/writable/logs/
+/writable/session/
+/writable/debugbar/
