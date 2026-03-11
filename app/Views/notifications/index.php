@@ -165,7 +165,7 @@
                             </div>
                             <div class="btn-group btn-group-sm">
                                 <?php if (!empty($note['link_url'])): ?>
-                                    <a href="<?= base_url($note['link_url']) ?>" class="btn btn-outline-primary shadow-none">View Details</a>
+                                    <!-- <a href="<?= base_url($note['link_url']) ?>" class="btn btn-outline-primary shadow-none">View Details</a> -->
                                 <?php endif; ?>
                                 <a href="<?= base_url('notifications/view/' . $note['id']) ?>" class="btn btn-outline-secondary shadow-none">
                                     <i class="fas fa-eye"></i>

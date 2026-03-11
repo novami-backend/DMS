@@ -246,7 +246,7 @@
                                         <div class="mb-2"><strong>Approver:</strong>
                                             <?= $document['approver_name'] ?? 'Not assigned' ?></div>
                                         <div class="mb-2"><strong>Approval Status:</strong> <span
-                                                class="badge badge-<?= getApprovalStatusColor($document['approval_status']) ?>"><?= ucfirst(str_replace('_', ' ', $document['approval_status'])) ?></span>
+                                                class="badge bg-<?= getApprovalStatusColor($document['approval_status']) ?>"><?= ucfirst(str_replace('_',' ', $document['approval_status'])) ?></span>
                                         </div>
                                         <?php if ($document['effective_date']): ?>
                                             <div class="mb-2"><strong>Effective:</strong>
@@ -298,14 +298,24 @@ function getStatusColor($status)
 
 function getApprovalStatusColor($status)
 {
-    $colors = [
-        'pending' => 'warning',
-        'sent_for_review' => 'info',
-        'reviewed' => 'primary',
-        'approved' => 'success',
-        'rejected' => 'danger'
-    ];
-    return $colors[$status] ?? 'secondary';
+    switch ($status) {
+        case 'pending':
+            return 'warning';
+        case 'sent_for_review':
+            return 'info';
+        case 'sent_for_approval':
+            return 'primary';
+        case 'approved_by_approver':
+            return 'success';
+        case 'admin_approved':
+            return 'success';
+        case 'returned_for_revision':
+            return 'secondary';
+        case 'rejected':
+            return 'danger';
+        default:
+            return 'dark';
+    }
 }
 
 function getActionColor($action)

@@ -37,62 +37,6 @@ class Auth extends BaseController
         helper('mail');
     }
 
-    // public function login()
-    // {
-    //     if ($this->request->getMethod() === 'POST') {
-    //         $username = $this->request->getPost('username');
-    //         $password = $this->request->getPost('password');
-
-    //         $user = $this->userModel->where('username', $username)->first();
-
-    //         if ($user && password_verify($password, $user['password_hash'])) {
-    //             // echo 'IN';
-    //             // Get user role
-    //             $userWithRole = $this->userModel->getUserWithRoles($user['id']);
-    //             // print_r($userWithRole);
-    //             // die;
-    //             // If superadmin, bypass all other checks
-    //             if ($userWithRole['role_name'] === 'superadmin') {
-    //                 session()->set([
-    //                     'user_id' => $user['id'],
-    //                     'username' => $user['username'],
-    //                     'role_id' => $userWithRole['role_id'],
-    //                     'role_name' => $userWithRole['role_name'],
-    //                     'logged_in' => true
-    //                 ]);
-
-    //                 $this->logModel->logActivity($user['id'], 'Superadmin logged in', 'Login bypass successful from IP: ' . $_SERVER['REMOTE_ADDR']);
-    //                 return redirect()->to('/dashboard');
-    //             }
-
-    //             // Normal user flow
-    //             if ($user['status'] === 'active') {
-    //                 session()->set([
-    //                     'user_id' => $user['id'],
-    //                     'username' => $user['username'],
-    //                     'role_id' => $userWithRole['role_id'],
-    //                     'role_name' => $userWithRole['role_name'],
-    //                     'logged_in' => true
-    //                 ]);
-
-    //                 $this->logModel->logActivity($user['id'], 'User logged in', 'Login successful from IP: ' . $_SERVER['REMOTE_ADDR']);
-    //                 return redirect()->to('/dashboard');
-    //             } else {
-    //                 session()->setFlashdata('error', 'Account is disabled.');
-    //                 $this->logModel->logActivity($user['id'] ?? 0, 'Login attempt failed', 'Account disabled');
-    //             }
-    //         } else {
-    //             // echo 'OUT';die;
-    //             session()->setFlashdata('error', 'Invalid username or password.');
-    //             if ($user) {
-    //                 $this->logModel->logActivity($user['id'], 'Login attempt failed', 'Invalid password');
-    //             }
-    //         }
-    //     }
-
-    //     return view('auth/login');
-    // }
-
     public function login()
     {
         $step = $this->request->getGet('step') ?? 'username';
@@ -113,61 +57,49 @@ class Auth extends BaseController
             if ($user) {
                 $userWithRole = $this->userModel->getUserWithRoles($user['id']);
 
-                // Case 1: User has password
                 if (!empty($user['password_hash'])) {
                     if ($password) {
                         if (password_verify($password, $user['password_hash'])) {
+                            session()->regenerate();
+                            // success
                             session()->set([
                                 'user_id'   => $user['id'],
                                 'username'  => $user['username'],
                                 'role_id'   => $userWithRole['role_id'],
                                 'role_name' => $userWithRole['role_name'],
+                                'department_id' => $user['department_id'],
                                 'logged_in' => true
                             ]);
                             $this->logModel->logActivity($user['id'], 'User logged in', 'Login successful');
                             return redirect()->to('/dashboard');
                         } else {
+                            $this->logModel->logActivity($user['id'], 'Login failed', 'Invalid password');
                             session()->setFlashdata('error', 'Invalid password.');
                         }
+                    } else {
+                        $this->logModel->logActivity(
+                            $user['id'],
+                            'Login step',
+                            'Opening password window'
+                        );
                     }
+
                     $step = 'password';
                 } else {
-                    // Case 2: No password set → token verification
+                    // token flow
                     if ($token && $password) {
                         return $this->verifyToken();
                     } else {
-                        // Generate token and send to admin
                         $token = bin2hex(random_bytes(16));
                         $this->userModel->update($user['id'], ['token' => $token]);
-
-                        // $adminEmail = "jr.developer.novami@gmail.com";
-                        $adminEmail = env('ADMIN_EMAIL', 'jr.developer.novami@gmail.com');
-                        $subject = "Login Token for User: {$user['username']}";
-                        $message = "
-                        <p>User <strong>{$user['username']}</strong> is trying to log in but has no password set.</p>
-                        <p>Token: <strong>{$token}</strong></p>
-                        <p>Please share this token with the user so they can verify and set their password.</p>";
-                        sendEmail($adminEmail, $subject, $message);
-
-                        // Find admin user record (example: superadmin)
-                        $admin = $this->userModel->where('username', 'superadmin')->first();
-
-                        if ($admin) {
-                            // Insert notification
-                            $this->notificationModel->createNotification([
-                                'user_id' => $user['id'],
-                                'type'    => 'password_reset',
-                                'message' => "User {$user['name']} requested a password reset. Token sent to admin.",
-                                'recipient_id' => $admin['id'],
-                                'priority' => 'high'
-                            ]);
-                        }
-
+                        // send email + notification...
+                        $this->logModel->logActivity($user['id'], 'Login attempt', 'No password set, token generated and sent to admin');
                         session()->setFlashdata('info', 'No password set. Token has been sent to admin for verification.');
                         $step = 'token';
                     }
                 }
             } else {
+                $this->logModel->logActivity(null, 'Login failed', "Invalid username/email: {$username}");
                 session()->setFlashdata('error', 'Invalid username/email.');
                 $step = 'username';
             }
@@ -179,6 +111,8 @@ class Auth extends BaseController
     public function resetPassword()
     {
         $step = 'reset';
+        // log that user opened reset page (user may not be logged in)
+        $this->logModel->logActivity(session()->get('user_id'), 'Opened password reset page');
         return view('auth/login', compact('step'));
     }
 
@@ -196,6 +130,9 @@ class Auth extends BaseController
                 // Generate token and update user
                 $token = bin2hex(random_bytes(16));
                 $this->userModel->update($user['id'], ['token' => $token]);
+
+                // log the reset request
+                $this->logModel->logActivity($user['id'], 'Password reset requested', 'Token generated and sent to admin');
 
                 // Send email to admin
                 $adminEmail = "jr.developer.novami@gmail.com";
@@ -223,6 +160,8 @@ class Auth extends BaseController
                 session()->setFlashdata('info', 'Password reset token has been sent to admin.');
                 return redirect()->to('/login?step=token&username=' . urlencode($username));
             } else {
+                // log failed request
+                $this->logModel->logActivity(null, 'Password reset failed', 'User not found: ' . $username);
                 session()->setFlashdata('error', 'User not found.');
                 return redirect()->to('/login?step=reset');
             }
@@ -262,7 +201,6 @@ class Auth extends BaseController
         }
         return view('auth/verify_token');
     }
-
 
     public function logout()
     {

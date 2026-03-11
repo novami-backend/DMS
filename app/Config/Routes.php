@@ -157,8 +157,8 @@ $routes->get('activity-logs', 'ActivityLogs::index', ['filter' => 'auth']);
 // API Routes for AJAX calls
 $routes->group('api', ['filter' => 'auth'], function($routes) {
     // Reviewers API
-    $routes->get('reviewers', 'Users::getReviewers');
-    $routes->get('reviewers/(:num)', 'Users::getReviewer/$1');
+    $routes->get('reviewers/(:num)', 'Users::getReviewers/$1');
+    $routes->get('reviewer/(:num)', 'Users::getReviewer/$1');
     
     // Users API
     $routes->get('users/(:num)', 'Users::getUser/$1');

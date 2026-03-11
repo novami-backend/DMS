@@ -491,7 +491,7 @@
                                     </div>
                                 <?php endif ?>
 
-                                <?php if ($document['approval_status'] === 'sent_for_review' && ($role_name === 'reviewer' || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
+                                <?php if ($document['approval_status'] === 'sent_for_review' && ( ($role_name === 'reviewer' && $document['reviewer_id'] == session()->get('user_id')) || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
                                     <div class="d-grid gap-2 mb-3">
                                         <button class="btn btn-success btn-sm" data-bs-toggle="modal"
                                             data-bs-target="#reviewModal">
@@ -500,11 +500,15 @@
                                     </div>
                                 <?php endif ?>
 
-                                <?php if ($document['approval_status'] === 'sent_for_approval' && ($role_name === 'approver')): ?>
+                                <?php if ($document['approval_status'] === 'sent_for_approval' && ( 
+                                        ($role_name === 'approver' && (empty($document['approver_id']) || $document['approver_id'] == session()->get('user_id'))) 
+                                        || $role_name === 'lab_manager' 
+                                        || $role_name === 'superadmin'
+                                    )): ?>
                                     <div class="d-grid gap-2 mb-3">
                                         <button class="btn btn-success btn-sm" data-bs-toggle="modal"
                                             data-bs-target="#approvalModal">
-                                            <i class="fas fa-check-circle me-2"></i>Approval
+                                            <i class="fas fa-check-circle me-2"></i>Approve Document
                                         </button>
                                     </div>
                                 <?php endif ?>
@@ -660,18 +664,24 @@
                                         <div class="mb-3">
                                             <label class="form-label">Select Action:</label>
                                             <div class="d-grid gap-2">
-                                                <button type="button" class="btn btn-success"
-                                                    onclick="setReviewAction('approve_for_final')">
-                                                    <i class="fas fa-check me-2"></i>Approve for Final
-                                                </button>
-                                                <button type="button" class="btn btn-warning"
-                                                    onclick="setReviewAction('return_for_revision')">
-                                                    <i class="fas fa-undo me-2"></i>Return for Revision
-                                                </button>
-                                                <button type="button" class="btn btn-danger"
-                                                    onclick="setReviewAction('reject')">
-                                                    <i class="fas fa-times me-2"></i>Reject Document
-                                                </button>
+                                                <?php if ($role_name === 'reviewer' && $document['reviewer_id'] == session()->get('user_id')): ?>
+                                                    <button type="button" class="btn btn-success"
+                                                            onclick="setReviewAction('approve_for_final')">
+                                                        <i class="fas fa-check me-2"></i>Approve
+                                                    </button>
+                                                    <button type="button" class="btn btn-warning"
+                                                            onclick="setReviewAction('return_for_revision')">
+                                                        <i class="fas fa-undo me-2"></i>Return for Revision
+                                                    </button>
+                                                    <button type="button" class="btn btn-danger"
+                                                            onclick="setReviewAction('reject')">
+                                                        <i class="fas fa-times me-2"></i>Reject Document
+                                                    </button>
+                                                <?php else: ?>
+                                                    <button type="button" class="btn btn-secondary" disabled title="Not assigned reviewer">
+                                                        <i class="fas fa-lock me-2"></i>Review Actions Unavailable
+                                                    </button>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                         <div id="review-action-section" style="display: none;">
@@ -709,25 +719,60 @@
                                         <p>Document: <strong><?= esc($document['title']) ?></strong></p>
                                         <div class="mb-3">
                                             <label class="form-label">Select Action:</label>
+                                            <?php if ((($role_name === 'approver' && (empty($document['approver_id']) || $document['approver_id'] == session()->get('user_id'))) || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
                                             <div class="d-grid gap-2">
                                                 <button type="button" class="btn btn-success"
                                                     onclick="setApprovalAction('approve')">
                                                     <i class="fas fa-check-circle me-2"></i>Approve
+                                                </button>
+                                                <button type="button" class="btn btn-warning"
+                                                    onclick="setApprovalAction('return_for_revision')">
+                                                    <i class="fas fa-undo me-2"></i>Return for Revision
                                                 </button>
                                                 <button type="button" class="btn btn-danger"
                                                     onclick="setApprovalAction('reject')">
                                                     <i class="fas fa-times-circle me-2"></i>Reject
                                                 </button>
                                             </div>
+                                        <?php else: ?>
+                                            <div class="d-grid gap-2">
+                                                <button type="button" class="btn btn-secondary" disabled title="Not assigned approver">
+                                                    <i class="fas fa-lock me-2"></i>Approval Actions Unavailable
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
                                         </div>
                                         <div id="approval-action-section" style="display: none;">
                                             <hr>
                                             <p>Action: <span id="approval-action-text"
                                                     class="badge bg-info"></span></p>
+                                            <div id="approval-target-section" style="display: none;" class="mb-3">
+                                                <label for="approval-target" class="form-label">Return To</label>
+                                                <select class="form-select" id="approval-target">
+                                                    <option value="creator"><?= esc($document['created_by_name'] ?? 'Creator') ?> (Creator)</option>
+                                                    <?php if (!empty($document['reviewer_id'])): ?>
+                                                        <option value="reviewer"><?= esc($document['reviewer_name'] ?? 'Reviewer') ?> (Reviewer)</option>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($reviewers)): ?>
+                                                        <?php foreach ($reviewers as $rev): ?>
+                                                            <?php if ($rev['id'] != ($document['reviewer_id'] ?? null)): ?>
+                                                                <option value="<?= $rev['id'] ?>">Reviewer: <?= esc($rev['username']) ?></option>
+                                                            <?php endif; ?>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($approvers)): ?>
+                                                        <?php foreach ($approvers as $apr): ?>
+                                                            <?php if ($apr['id'] != session()->get('user_id')): ?>
+                                                                <option value="<?= $apr['id'] ?>">Approver: <?= esc($apr['username']) ?></option>
+                                                            <?php endif; ?>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </select>
+                                            </div>
                                             <div class="mb-3">
                                                 <label for="approval-comments" class="form-label">Comments <span
                                                         class="text-muted">(Optional for approval, Required for
-                                                        rejection)</span></label>
+                                                        rejection or return)</span></label>
                                                 <textarea class="form-control" id="approval-comments" rows="4"
                                                     placeholder="Enter your comments..."></textarea>
                                             </div>
@@ -830,12 +875,22 @@
                                     'reject': {
                                         text: 'Reject',
                                         class: 'bg-danger'
+                                    },
+                                    'return_for_revision': {
+                                        text: 'Return for Revision',
+                                        class: 'bg-warning'
                                     }
                                 };
                                 const actionInfo = actionTexts[action];
                                 document.getElementById('approval-action-text').textContent = actionInfo.text;
                                 document.getElementById('approval-action-text').className = 'badge ' + actionInfo.class;
                                 document.getElementById('approval-comments').value = '';
+                                // show target if returning
+                                if (action === 'return_for_revision') {
+                                    document.getElementById('approval-target-section').style.display = 'block';
+                                } else {
+                                    document.getElementById('approval-target-section').style.display = 'none';
+                                }
                                 document.getElementById('approval-action-section').style.display = 'block';
                                 document.getElementById('confirm-approval-btn').style.display = 'block';
                             }
@@ -953,9 +1008,29 @@
                             function submitApproval() {
                                 const comments = document.getElementById('approval-comments').value;
 
-                                if (currentApprovalAction === 'reject' && !comments.trim()) {
-                                    alert('Comments are required for rejection');
+                                if ((currentApprovalAction === 'reject' || currentApprovalAction === 'return_for_revision') && !comments.trim()) {
+                                    alert('Comments are required for rejection or return');
                                     return;
+                                }
+
+                                // Determine final action and target
+                                let postAction = currentApprovalAction;
+                                let targetUser = '';
+                                if (currentApprovalAction === 'return_for_revision') {
+                                    const choice = document.getElementById('approval-target').value;
+                                    if (choice === 'creator') {
+                                        postAction = 'return_to_creator';
+                                        targetUser = <?= json_encode($document['created_by'] ?? '') ?>;
+                                    } else {
+                                        // anything else sends back to reviewer stage
+                                        postAction = 'return_to_reviewer';
+                                        if (choice === 'reviewer') {
+                                            targetUser = <?= json_encode($document['reviewer_id'] ?? '') ?>;
+                                        } else {
+                                            // numeric id from other reviewer/approver
+                                            targetUser = choice;
+                                        }
+                                    }
                                 }
 
                                 // Disable button to prevent double submission
@@ -971,8 +1046,9 @@
                                             'X-Requested-With': 'XMLHttpRequest'
                                         },
                                         body: new URLSearchParams({
-                                            'action': currentApprovalAction,
-                                            'comments': comments
+                                            'action': postAction,
+                                            'comments': comments,
+                                            'target_user_id': targetUser
                                         })
                                     })
                                     .then(response => response.json())

@@ -49,57 +49,66 @@
 
                     <!-- Approval Statistics -->
                     <div class="row mb-4">
-                        <div class="col-lg-2 col-6">
-                            <div class="card text-bg-warning mb-1">
-                                <div class="card-body text-center">
-                                    <h3><?= count($pending_documents ?? []) ?></h3>
-                                    <p>Pending</p>
-                                    <i class="fas fa-clock"></i>
+                        <div class="col-lg-2 col-4 mb-2">
+                            <div class="card text-bg-warning h-100">
+                                <div class="card-body text-center p-2">
+                                    <h4><?= count($pending_documents ?? []) ?></h4>
+                                    <p class="mb-0 small">Pending</p>
+                                    <i class="fas fa-clock fa-xs"></i>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-2 col-6">
-                            <div class="card text-bg-info mb-1">
-                                <div class="card-body text-center">
-                                    <h3><?= count($sent_for_review_documents ?? []) ?></h3>
-                                    <p>Under Review</p>
-                                    <i class="fas fa-search"></i>
+                        <div class="col-lg-2 col-4 mb-2">
+                            <div class="card text-bg-info h-100">
+                                <div class="card-body text-center p-2">
+                                    <h4><?= count($sent_for_review_documents ?? []) ?></h4>
+                                    <p class="mb-0 small">In Review</p>
+                                    <i class="fas fa-search fa-xs"></i>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-2 col-6">
-                            <div class="card text-bg-primary mb-1">
-                                <div class="card-body text-center">
-                                    <h3><?= count($sent_for_approval_documents ?? []) ?></h3>
-                                    <p>Reviewed</p>
-                                    <i class="fas fa-check-circle"></i>
+                        <div class="col-lg-2 col-4 mb-2">
+                            <div class="card text-bg-primary h-100">
+                                <div class="card-body text-center p-2">
+                                    <h4><?= count($sent_for_approval_documents ?? []) ?></h4>
+                                    <p class="mb-0 small">Sent for Approval</p>
+                                    <i class="fas fa-check-circle fa-xs"></i>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-2 col-6">
-                            <div class="card text-bg-success mb-1">
-                                <div class="card-body text-center">
-                                    <h3><?= count($approved_by_approver_documents ?? []) ?></h3>
-                                    <p>Approved</p>
-                                    <i class="fas fa-thumbs-up"></i>
+                        <div class="col-lg-2 col-4 mb-2">
+                            <div class="card text-bg-success h-100">
+                                <div class="card-body text-center p-2">
+                                    <h4><?= count($approved_by_approver_documents ?? []) ?></h4>
+                                    <p class="mb-0 small">Approved by Approver</p>
+                                    <i class="fas fa-thumbs-up fa-xs"></i>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-2 col-6">
-                            <div class="card text-bg-secondary mb-1">
-                                <div class="card-body text-center">
-                                    <h3><?= count($returned_for_revision_documents ?? []) ?></h3>
-                                    <p>Needs Revision</p>
-                                    <i class="fas fa-edit"></i>
+                        <div class="col-lg-2 col-4 mb-2">
+                            <div class="card text-bg-success h-100" style="background-color: #198754 !important;">
+                                <div class="card-body text-center p-2">
+                                    <h4><?= count($admin_approved_documents ?? []) ?></h4>
+                                    <p class="mb-0 small">Admin Approved</p>
+                                    <i class="fas fa-check-double fa-xs"></i>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-2 col-6">
-                            <div class="card text-bg-danger mb-1">
-                                <div class="card-body text-center">
-                                    <h3><?= count($rejected_documents ?? []) ?></h3>
-                                    <p>Rejected</p>
-                                    <i class="fas fa-times-circle"></i>
+                        <div class="col-lg-1 col-4 mb-2">
+                            <div class="card text-bg-secondary h-100">
+                                <div class="card-body text-center p-1">
+                                    <h5><?= count($returned_for_revision_documents ?? []) ?></h5>
+                                    <p class="mb-0 small">Returned</p>
+                                    <i class="fas fa-edit fa-xs"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-1 col-4 mb-2">
+                            <div class="card text-bg-danger h-100">
+                                <div class="card-body text-center p-1">
+                                    <h5><?= count($rejected_documents ?? []) ?></h5>
+                                    <p class="mb-0 small">Rejected</p>
+                                    <i class="fas fa-times-circle fa-xs"></i>
                                 </div>
                             </div>
                         </div>
@@ -201,7 +210,7 @@
                                                             class="btn btn-sm btn-info">
                                                             <i class="fas fa-eye"></i> View
                                                         </a>
-                                                        <?php if ($role_name === 'admin' || $role_name === 'superadmin'): ?>
+                                                        <?php if ($role_name === 'admin' || $role_name === 'dept_admin' || $role_name === 'superadmin'): ?>
                                                             <button class="btn btn-sm btn-primary assign-reviewer-btn"
                                                                 data-doc-id="<?= $doc['id'] ?>"
                                                                 data-doc-title="<?= esc($doc['title']) ?>"
@@ -209,10 +218,16 @@
                                                                 <i class="fas fa-user-plus"></i> Share
                                                             </button>
                                                         <?php else: ?>
-                                                            <a href="<?= base_url('documents/submit-for-review/' . $doc['id']) ?>"
-                                                                class="btn btn-sm btn-primary">
-                                                                <i class="fas fa-paper-plane"></i> Submit for Review
-                                                            </a>
+                                                            <?php if (!empty($doc['reviewer_id'])): ?>
+                                                                <a href="<?= base_url('documents/submit-for-review/' . $doc['id']) ?>"
+                                                                    class="btn btn-sm btn-primary">
+                                                                    <i class="fas fa-paper-plane"></i> Submit for Review
+                                                                </a>
+                                                            <?php else: ?>
+                                                                <button class="btn btn-sm btn-secondary" disabled title="No reviewer assigned">
+                                                                    <i class="fas fa-paper-plane"></i> Submit for Review
+                                                                </button>
+                                                            <?php endif; ?>
                                                         <?php endif ?>
                                                     </td>
                                                 </tr>
@@ -259,12 +274,12 @@
                                                             class="btn btn-sm btn-info">
                                                             <i class="fas fa-eye"></i> View
                                                         </a>
-                                                        <?php if ($role_name === 'Reviewer'): ?>
-                                                            <button class="btn btn-sm btn-success quick-review-btn"
+                                                        <?php if ($role_name === 'reviewer'): ?>
+                                                            <!-- <button class="btn btn-sm btn-success quick-review-btn"
                                                                 data-doc-id="<?= $doc['id'] ?>"
                                                                 data-doc-title="<?= esc($doc['title']) ?>"
                                                                 data-action="approve_for_final">
-                                                                <i class="fas fa-check"></i> Approve for Final
+                                                                <i class="fas fa-check"></i> Approve
                                                             </button>
                                                             <button class="btn btn-sm btn-warning quick-review-btn"
                                                                 data-doc-id="<?= $doc['id'] ?>"
@@ -276,9 +291,7 @@
                                                                 data-doc-id="<?= $doc['id'] ?>"
                                                                 data-doc-title="<?= esc($doc['title']) ?>" data-action="reject">
                                                                 <i class="fas fa-times"></i> Reject
-                                                            </button>
-                                                        <?php else: ?>
-                                                            
+                                                            </button> -->
                                                         <?php endif ?>
                                                         <a href="<?= base_url('documents/approval-history/' . $doc['id']) ?>"
                                                             class="btn btn-sm btn-secondary">
@@ -329,19 +342,38 @@
                                                             class="btn btn-sm btn-info">
                                                             <i class="fas fa-eye"></i> View
                                                         </a>
-                                                        <?php if ($role_name === 'Approver'): ?>
-                                                            <button class="btn btn-sm btn-success quick-approve-btn"
+                                                        <?php if ((($role_name === 'approver' && (empty($doc['approver_id']) || $doc['approver_id'] == session()->get('user_id'))) || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
+                                                            <?php $revList = json_encode($reviewer_lists[$doc['id']] ?? []); ?>
+                                                            <?php $aprList = json_encode($approver_lists[$doc['id']] ?? []); ?>
+                                                            <!-- <button class="btn btn-sm btn-success quick-approve-btn"
                                                                 data-doc-id="<?= $doc['id'] ?>"
-                                                                data-doc-title="<?= esc($doc['title']) ?>" data-action="approve">
+                                                                data-doc-title="<?= esc($doc['title']) ?>" data-action="approve"
+                                                                data-creator-id="<?= $doc['created_by'] ?>"
+                                                                data-reviewer-id="<?= $doc['reviewer_id'] ?? '' ?>"
+                                                                data-reviewers='<?= esc($revList) ?>'
+                                                                data-approvers='<?= esc($aprList) ?>'>
                                                                 <i class="fas fa-check"></i> Quick Approve
+                                                            </button>
+                                                            <button class="btn btn-sm btn-warning quick-approve-btn"
+                                                                data-doc-id="<?= $doc['id'] ?>"
+                                                                data-doc-title="<?= esc($doc['title']) ?>" data-action="return_for_revision"
+                                                                data-creator-id="<?= $doc['created_by'] ?>"
+                                                                data-reviewer-id="<?= $doc['reviewer_id'] ?? '' ?>"
+                                                                data-reviewers='<?= esc($revList) ?>'
+                                                                data-approvers='<?= esc($aprList) ?>'>
+                                                                <i class="fas fa-undo"></i> Return
                                                             </button>
                                                             <button class="btn btn-sm btn-danger quick-approve-btn"
                                                                 data-doc-id="<?= $doc['id'] ?>"
-                                                                data-doc-title="<?= esc($doc['title']) ?>" data-action="reject">
+                                                                data-doc-title="<?= esc($doc['title']) ?>" data-action="reject"
+                                                                data-creator-id="<?= $doc['created_by'] ?>"
+                                                                data-reviewer-id="<?= $doc['reviewer_id'] ?? '' ?>"
+                                                                data-reviewers='<?= esc($revList) ?>'
+                                                                data-approvers='<?= esc($aprList) ?>'>
                                                                 <i class="fas fa-times"></i> Reject
-                                                            </button>
+                                                            </button> -->
                                                         <?php else: ?>
-                                                            <span class="badge bg-warning">Only approver can approve</span>
+                                                            <!-- Approver not assigned or not you -->
                                                         <?php endif ?>
                                                         <a href="<?= base_url('documents/approval-history/' . $doc['id']) ?>"
                                                             class="btn btn-sm btn-secondary">
@@ -396,13 +428,63 @@
                                                             class="btn btn-sm btn-secondary">
                                                             <i class="fas fa-history"></i> History
                                                         </a>
-                                                        <?php if ($role_name === 'admin' || $role_name === 'superadmin'): ?>
+                                                        <?php if ($role_name === 'admin' || $role_name === 'dept_admin' || $role_name === 'superadmin'): ?>
                                                             <a href="<?= base_url('documents/lock/' . $doc['id']) ?>"
                                                                 class="btn btn-sm btn-warning"
                                                                 onclick="return confirm('Are you sure you want to lock this document as obsolete?')">
                                                                 <i class="fas fa-lock"></i> Lock
                                                             </a>
                                                         <?php endif ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif ?>
+                        </div>
+
+
+                        <!-- Admin Approved Documents -->
+                        <div class="tab-pane fade" id="admin-approved" role="tabpanel">
+                            <?php if (empty($admin_approved_documents)): ?>
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> No admin approved documents.
+                                </div>
+                            <?php else: ?>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Document</th>
+                                                <th>Type</th>
+                                                <th>Department</th>
+                                                <th>Approved By</th>
+                                                <th>Approved Date</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($admin_approved_documents as $doc): ?>
+                                                <tr>
+                                                    <td>
+                                                        <strong><?= esc($doc['title']) ?></strong>
+                                                        <br><small class="text-muted">ID: <?= $doc['id'] ?></small>
+                                                    </td>
+                                                    <td><?= esc($doc['type_name']) ?></td>
+                                                    <td><?= esc($doc['department_name']) ?></td>
+                                                    <td><?= esc($doc['approver_name'] ?? 'System') ?></td>
+                                                    <td><?= $doc['approved_at'] ? date('M j, Y', strtotime($doc['approved_at'])) : '-' ?>
+                                                    </td>
+                                                    <td>
+                                                        <a href="<?= base_url('documents/view/' . $doc['id']) ?>"
+                                                            class="btn btn-sm btn-info">
+                                                            <i class="fas fa-eye"></i> View
+                                                        </a>
+                                                        <a href="<?= base_url('documents/approval-history/' . $doc['id']) ?>"
+                                                            class="btn btn-sm btn-secondary">
+                                                            <i class="fas fa-history"></i> History
+                                                        </a>
                                                     </td>
                                                 </tr>
                                             <?php endforeach ?>
@@ -442,7 +524,7 @@
                                                     </td>
                                                     <td><?= esc($doc['type_name']) ?></td>
                                                     <td><?= esc($doc['department_name']) ?></td>
-                                                    <td><?= esc($doc['reviewer_name'] ?? 'System') ?></td>
+                                                    <td><?= esc($doc['approver_name'] ?? $doc['reviewer_name'] ?? 'System') ?></td>
                                                     <td><?= $doc['returned_for_revision_at'] ? date('M j, Y', strtotime($doc['returned_for_revision_at'])) : '-' ?>
                                                     </td>
                                                     <td>
@@ -456,7 +538,7 @@
                                                             class="btn btn-sm btn-info">
                                                             <i class="fas fa-eye"></i> View
                                                         </a>
-                                                        <?php if ($role_name === 'admin' || $role_name === 'superadmin' || $doc['created_by'] == session()->get('user_id')): ?>
+                                                        <?php if ($role_name === 'admin' || $role_name === 'dept_admin' || $role_name === 'superadmin' || $doc['created_by'] == session()->get('user_id')): ?>
                                                             <a href="<?= base_url('documents/edit/' . $doc['id']) ?>"
                                                                 class="btn btn-sm btn-warning">
                                                                 <i class="fas fa-edit"></i> Revise
@@ -606,6 +688,13 @@
                         <textarea class="form-control" id="approve-comments" rows="3"
                             placeholder="Enter your comments..."></textarea>
                     </div>
+                    <div class="mb-3" id="quick-target-section" style="display:none;">
+                        <label for="quick-target-user" class="form-label">Return To</label>
+                        <select class="form-select" id="quick-target-user">
+                            <option value="creator">Creator</option>
+                            <option value="reviewer">Reviewer</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -639,16 +728,13 @@
         </div>
     </div>
 
-    <?= view('common/footer') ?>
-    <?= view('common/scripts') ?>
     <!-- jQuery (must come first) -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> <!-- Bootstrap JS (for tabs, modals, etc.) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script>
-        $(document).ready(function () {
+        $(document).ready(function() {
             // Initialize DataTables for better table handling
             $('.table').DataTable({
                 "pageLength": 25,
@@ -656,231 +742,282 @@
                     [4, "desc"]
                 ], // Sort by date column
                 "columnDefs": [{
-                    "orderable": false,
-                    "targets": -1
-                } // Disable sorting on Actions column
+                        "orderable": false,
+                        "targets": -1
+                    } // Disable sorting on Actions column
                 ]
             });
 
-            let currentDocId = null;
-            let currentAction = null;
 
-            // Assign Reviewer Modal
-            $('.assign-reviewer-btn').on('click', function () {
+
+            // assign reviewer button opens modal and loads department reviewers
+            $('.assign-reviewer-btn').on('click', function() {
                 currentDocId = $(this).data('doc-id');
-                const docTitle = $(this).data('doc-title');
                 const departmentId = $(this).data('department-id');
+                const docTitle = $(this).data('doc-title');
 
                 $('#assign-doc-title').text(docTitle);
 
-                // Load reviewers for the department
-                // $.get('<?= base_url('api/reviewers') ?>/' + departmentId)
-                $.get('<?= base_url('api/reviewers') ?>')
-                    .done(function (data) {
-                        console.log(data.length);
-                        const select = $('#reviewer-select');
-                        select.empty();
-                        select.append('<option value="">Select a reviewer...</option>');
+                const select = $('#reviewer-select');
+                select.empty().append('<option value="">Select a reviewer...</option>');
 
+                $.get('<?= base_url('api/reviewers') ?>/' + departmentId)
+                    .done(function(data) {
                         if (data && data.length > 0) {
-                            data.forEach(function (reviewer) {
+                            data.forEach(function(reviewer) {
                                 select.append(`<option value="${reviewer.id}">${reviewer.name} - (${reviewer.username})</option>`);
                             });
                         } else {
                             select.append('<option value="">No reviewers available</option>');
                         }
                     })
-                    .fail(function () {
-                        $('#reviewer-select').html('<option value="">Error loading reviewers</option>');
+                    .fail(function() {
+                        select.html('<option value="">Error loading reviewers</option>');
                     });
 
                 $('#assignReviewerModal').modal('show');
             });
+        });
 
-            $('#confirm-assign-reviewer').on('click', function () {
-                const reviewerId = $('#reviewer-select').val();
+        $('#confirm-assign-reviewer').on('click', function() {
+            const reviewerId = $('#reviewer-select').val();
 
-                if (!reviewerId) {
-                    alert('Please select a reviewer');
-                    return;
-                }
+            if (!reviewerId) {
+                alert('Please select a reviewer');
+                return;
+            }
 
-                $(this).prop('disabled', true).text('Assigning...');
+            $(this).prop('disabled', true).text('Assigning...');
 
-                $.post('<?= base_url('documents/assign-reviewer') ?>/' + currentDocId, {
+            $.post('<?= base_url('documents/assign-reviewer') ?>/' + currentDocId, {
                     reviewer_id: reviewerId
                 })
-                    .done(function (response) {
-                        if (response.success) {
-                            alert(response.message);
-                            location.reload();
-                        } else {
-                            alert(response.message || 'Failed to assign reviewer');
-                        }
-                    })
-                    .fail(function () {
-                        alert('Error assigning reviewer');
-                    })
-                    .always(function () {
-                        $('#confirm-assign-reviewer').prop('disabled', false).text('Assign Reviewer');
-                        $('#assignReviewerModal').modal('hide');
-                    });
-            });
-
-            // Quick Review Modal
-            $('.quick-review-btn').on('click', function () {
-                currentDocId = $(this).data('doc-id');
-                currentAction = $(this).data('action');
-                const docTitle = $(this).data('doc-title');
-
-                $('#review-doc-title').text(docTitle);
-
-                const actionTexts = {
-                    'approve_for_final': {
-                        text: 'Approve for Final',
-                        class: 'bg-success'
-                    },
-                    'return_for_revision': {
-                        text: 'Return for Revision',
-                        class: 'bg-warning'
-                    },
-                    'reject': {
-                        text: 'Reject',
-                        class: 'bg-danger'
+                .done(function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to assign reviewer');
                     }
-                };
+                })
+                .fail(function() {
+                    alert('Error assigning reviewer');
+                })
+                .always(function() {
+                    $('#confirm-assign-reviewer').prop('disabled', false).text('Assign Reviewer');
+                    $('#assignReviewerModal').modal('hide');
+                });
+        });
 
-                const actionInfo = actionTexts[currentAction];
-                $('#review-action-text').text(actionInfo.text).removeClass().addClass('badge ' + actionInfo.class);
+        // Quick Review Modal
+        $('.quick-review-btn').on('click', function() {
+            currentDocId = $(this).data('doc-id');
+            currentAction = $(this).data('action');
+            const docTitle = $(this).data('doc-title');
 
-                // Clear previous comments
-                $('#review-comments').val('');
+            $('#review-doc-title').text(docTitle);
 
-                $('#quickReviewModal').modal('show');
-            });
-
-            $('#confirm-review').on('click', function () {
-                const comments = $('#review-comments').val();
-
-                if (currentAction === 'reject' && !comments.trim()) {
-                    alert('Comments are required for rejection');
-                    return;
+            const actionTexts = {
+                'approve_for_final': {
+                    text: 'Approve for Final',
+                    class: 'bg-success'
+                },
+                'return_for_revision': {
+                    text: 'Return for Revision',
+                    class: 'bg-warning'
+                },
+                'reject': {
+                    text: 'Reject',
+                    class: 'bg-danger'
                 }
+            };
 
-                $(this).prop('disabled', true).text('Processing...');
+            const actionInfo = actionTexts[currentAction];
+            $('#review-action-text').text(actionInfo.text).removeClass().addClass('badge ' + actionInfo.class);
 
-                $.post('<?= base_url('documents/quick-review') ?>/' + currentDocId, {
+            // Clear previous comments
+            $('#review-comments').val('');
+
+            $('#quickReviewModal').modal('show');
+        });
+
+        $('#confirm-review').on('click', function() {
+            const comments = $('#review-comments').val();
+
+            if (currentAction === 'reject' && !comments.trim()) {
+                alert('Comments are required for rejection');
+                return;
+            }
+
+            $(this).prop('disabled', true).text('Processing...');
+
+            $.post('<?= base_url('documents/quick-review') ?>/' + currentDocId, {
                     action: currentAction,
                     comments: comments
                 })
-                    .done(function (response) {
-                        if (response.success) {
-                            alert(response.message);
-                            location.reload();
-                        } else {
-                            alert(response.message || 'Failed to process review');
-                        }
-                    })
-                    .fail(function () {
-                        alert('Error processing review');
-                    })
-                    .always(function () {
-                        $('#confirm-review').prop('disabled', false).text('Confirm Review');
-                        $('#quickReviewModal').modal('hide');
-                    });
-            });
-
-            // Quick Approve Modal
-            $('.quick-approve-btn').on('click', function () {
-                currentDocId = $(this).data('doc-id');
-                currentAction = $(this).data('action');
-                const docTitle = $(this).data('doc-title');
-
-                $('#approve-doc-title').text(docTitle);
-
-                const actionTexts = {
-                    'approve': {
-                        text: 'Approve',
-                        class: 'bg-success'
-                    },
-                    'reject': {
-                        text: 'Reject',
-                        class: 'bg-danger'
+                .done(function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to process review');
                     }
-                };
-
-                const actionInfo = actionTexts[currentAction];
-                $('#approve-action-text').text(actionInfo.text).removeClass().addClass('badge ' + actionInfo.class);
-
-                // Clear previous comments
-                $('#approve-comments').val('');
-
-                $('#quickApproveModal').modal('show');
-            });
-
-            $('#confirm-approve').on('click', function () {
-                const comments = $('#approve-comments').val();
-
-                if (currentAction === 'reject' && !comments.trim()) {
-                    alert('Comments are required for rejection');
-                    return;
-                }
-
-                $(this).prop('disabled', true).text('Processing...');
-
-                $.post('<?= base_url('documents/quick-approve') ?>/' + currentDocId, {
-                    action: currentAction,
-                    comments: comments
                 })
-                    .done(function (response) {
-                        if (response.success) {
-                            alert(response.message);
-                            location.reload();
-                        } else {
-                            alert(response.message || 'Failed to process approval');
-                        }
-                    })
-                    .fail(function () {
-                        alert('Error processing approval');
-                    })
-                    .always(function () {
-                        $('#confirm-approve').prop('disabled', false).text('Confirm Action');
-                        $('#quickApproveModal').modal('hide');
-                    });
-            });
+                .fail(function() {
+                    alert('Error processing review');
+                })
+                .always(function() {
+                    $('#confirm-review').prop('disabled', false).text('Confirm Review');
+                    $('#quickReviewModal').modal('hide');
+                });
+        });
 
-            // Resubmit Modal
-            $('.resubmit-btn').on('click', function () {
-                currentDocId = $(this).data('doc-id');
-                const docTitle = $(this).data('doc-title');
+        // Quick Approve Modal
+        $('.quick-approve-btn').on('click', function() {
+            currentDocId = $(this).data('doc-id');
+            currentAction = $(this).data('action');
+            const docTitle = $(this).data('doc-title');
+            const creatorId = $(this).data('creator-id');
+            const reviewerId = $(this).data('reviewer-id');
+            // reviewers and approvers lists encoded as JSON
+            const reviewerList = $(this).attr('data-reviewers') ? JSON.parse($(this).attr('data-reviewers')) : [];
+            const approverList = $(this).attr('data-approvers') ? JSON.parse($(this).attr('data-approvers')) : [];
 
-                $('#resubmit-doc-title').text(docTitle);
-                $('#resubmitModal').modal('show');
-            });
+            $('#approve-doc-title').text(docTitle);
 
-            $('#confirm-resubmit').on('click', function () {
-                $(this).prop('disabled', true).text('Resubmitting...');
+            const actionTexts = {
+                'approve': {
+                    text: 'Approve',
+                    class: 'bg-success'
+                },
+                'reject': {
+                    text: 'Reject',
+                    class: 'bg-danger'
+                },
+                'return_for_revision': {
+                    text: 'Return for Revision',
+                    class: 'bg-warning'
+                }
+            };
 
-                $.post('<?= base_url('documents/resubmit-after-revision') ?>/' + currentDocId)
-                    .done(function (response) {
-                        if (response && response.success) {
-                            alert(response.message || 'Document resubmitted successfully');
-                            location.reload();
-                        } else {
-                            // Handle non-AJAX response (redirect)
-                            location.reload();
-                        }
-                    })
-                    .fail(function () {
-                        alert('Error resubmitting document');
-                    })
-                    .always(function () {
-                        $('#confirm-resubmit').prop('disabled', false).text('Resubmit Document');
-                        $('#resubmitModal').modal('hide');
-                    });
-            });
+            const actionInfo = actionTexts[currentAction] || {
+                text: currentAction,
+                class: 'bg-secondary'
+            };
+            $('#approve-action-text').text(actionInfo.text).removeClass().addClass('badge ' + actionInfo.class);
+
+            // Clear previous comments
+            $('#approve-comments').val('');
+
+            if (currentAction === 'return_for_revision') {
+                $('#quick-target-section').show();
+                $('#quick-target-user').empty();
+                $('#quick-target-user').append('<option value="creator">Creator</option>');
+                if (reviewerId) {
+                    $('#quick-target-user').append('<option value="reviewer">Reviewer</option>');
+                }
+                // include other reviewers
+                reviewerList.forEach(function(u) {
+                    if (u.id && u.id != reviewerId) {
+                        $('#quick-target-user').append('<option value="' + u.id + '">Reviewer: ' + u.username + '</option>');
+                    }
+                });
+                // include other approvers
+                approverList.forEach(function(u) {
+                    if (u.id) {
+                        $('#quick-target-user').append('<option value="' + u.id + '">Approver: ' + u.username + '</option>');
+                    }
+                });
+            } else {
+                $('#quick-target-section').hide();
+            }
+
+            $('#quickApproveModal').modal('show');
+        });
+
+        $('#confirm-approve').on('click', function() {
+            const comments = $('#approve-comments').val();
+
+            if ((currentAction === 'reject' || currentAction === 'return_for_revision') && !comments.trim()) {
+                alert('Comments are required for rejection or return');
+                return;
+            }
+
+            let postAction = currentAction;
+            let targetUserId = '';
+            if (currentAction === 'return_for_revision') {
+                const choice = $('#quick-target-user').val();
+                if (choice === 'creator') {
+                    postAction = 'return_to_creator';
+                    targetUserId = $(".quick-approve-btn[data-doc-id='" + currentDocId + "']").data('creator-id');
+                } else if (choice === 'reviewer') {
+                    postAction = 'return_to_reviewer';
+                    targetUserId = $(".quick-approve-btn[data-doc-id='" + currentDocId + "']").data('reviewer-id');
+                } else if (choice) {
+                    // numeric id passed (other reviewer or approver)
+                    postAction = 'return_to_reviewer';
+                    targetUserId = choice;
+                }
+            }
+
+            $(this).prop('disabled', true).text('Processing...');
+
+            $.post('<?= base_url('documents/quick-approve') ?>/' + currentDocId, {
+                    action: postAction,
+                    comments: comments,
+                    target_user_id: targetUserId
+                })
+                .done(function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        location.reload();
+                    } else {
+                        alert(response.message || 'Failed to process approval');
+                    }
+                })
+                .fail(function() {
+                    alert('Error processing approval');
+                })
+                .always(function() {
+                    $('#confirm-approve').prop('disabled', false).text('Confirm Action');
+                    $('#quickApproveModal').modal('hide');
+                });
+        });
+
+        // Resubmit Modal
+        $('.resubmit-btn').on('click', function() {
+            currentDocId = $(this).data('doc-id');
+            const docTitle = $(this).data('doc-title');
+
+            $('#resubmit-doc-title').text(docTitle);
+            $('#resubmitModal').modal('show');
+        });
+
+        $('#confirm-resubmit').on('click', function() {
+            $(this).prop('disabled', true).text('Resubmitting...');
+
+            $.post('<?= base_url('documents/resubmit-after-revision') ?>/' + currentDocId)
+                .done(function(response) {
+                    if (response && response.success) {
+                        alert(response.message || 'Document resubmitted successfully');
+                        location.reload();
+                    } else {
+                        // Handle non-AJAX response (redirect)
+                        location.reload();
+                    }
+                })
+                .fail(function() {
+                    alert('Error resubmitting document');
+                })
+                .always(function() {
+                    $('#confirm-resubmit').prop('disabled', false).text('Resubmit Document');
+                    $('#resubmitModal').modal('hide');
+                });
         });
     </script>
+
+    <?= view('common/footer') ?>
+    <?= view('common/scripts') ?>
 </body>
 
 </html>

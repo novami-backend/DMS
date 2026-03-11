@@ -3,6 +3,17 @@
 
 # Environment file
 .env
+env
+
+# Unwanted files
+approval_routes.php
+check_db.php
+check_notif.php
+debug_user_role.php
+dump_db.php
+fix_notifications_db.php
+fix_tables.ps1
+list_spacing.txt
 
 # Writable directories (runtime data)
 writable/cache/
@@ -18,6 +29,9 @@ writable/debugbar/
 *.bak
 *.tmp
 *.log
+*.md
+*.sql
+*.bib
 
 # OS files
 .DS_Store

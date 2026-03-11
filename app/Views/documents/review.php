@@ -73,8 +73,8 @@ if (! function_exists('getActionColor')) {
                                     <label for="action" class="form-label required">Review Decision</label>
                                     <select class="form-select" id="action" name="action" required>
                                         <option value="">Select Action</option>
-                                        <option value="approve_for_final">Approve Document</option>
-                                        <option value="return_for_revision">Return for Revision</option>
+                                        <option value="approve_for_final">Approve & Forward to Approver</option>
+                                        <option value="return_to_creator">Return for Revision (to Creator)</option>
                                         <option value="reject">Reject Document</option>
                                     </select>
                                 </div>
@@ -145,7 +145,7 @@ if (! function_exists('getActionColor')) {
             const commentsField = $('#comments');
             if (action === 'approve_for_final') {
                 commentsField.attr('placeholder', 'Provide any final comments or recommendations...');
-            } else if (action === 'return_for_revision') {
+            } else if (action === 'return_to_creator' || action === 'return_for_revision') {
                 commentsField.attr('placeholder', 'Specify what needs to be revised...');
             } else if (action === 'reject') {
                 commentsField.attr('placeholder', 'Explain why this document is being rejected...');

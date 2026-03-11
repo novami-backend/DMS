@@ -227,14 +227,17 @@ class Users extends BaseController
     }
 
     // API method to get reviewer details
-    public function getReviewers()
+    public function getReviewers($documentDepartmentId = null)
     {
         $conditions = ['role_id' => 4];
-        // if ($departmentId) {
-        //     $conditions['department_id'] = $departmentId;
-        // }
+
+        // Restrict reviewers to the same department as the document
+        if ($documentDepartmentId !== null) {
+            $conditions['department_id'] = $documentDepartmentId;
+        }
 
         $users = $this->mainModel->getRecords('users', $conditions);
+        // echo $this->db->getLastQuery();die;
 
         if (empty($users)) {
             return $this->response->setStatusCode(404)

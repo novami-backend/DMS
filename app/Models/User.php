@@ -9,7 +9,7 @@ class User extends Model
     protected $table = 'users';
     protected $primaryKey = 'id';
     protected $useTimestamps = true;
-    protected $allowedFields = ['name', 'username', 'password_hash', 'email', 'sign', 'status','token', 'department_id', 'role_id'];
+    protected $allowedFields = ['name', 'username', 'password_hash', 'email', 'sign', 'status', 'token', 'department_id', 'role_id'];
     protected $beforeInsert = ['hashPassword'];
     protected $beforeUpdate = ['hashPassword'];
 
@@ -50,7 +50,7 @@ class User extends Model
             ->where('permissions.permission_key', $permissionKey)
             ->get()
             ->getRow();
-        
+
         return $permission !== null;
     }
 
@@ -63,11 +63,20 @@ class User extends Model
 
     public function getUsersWithRolesDepartment()
     {
-        return $this->select('users.*, roles.role_name, departments.name as department_name')
+        $builder = $this->select('users.*, roles.role_name, departments.name as department_name')
             ->join('roles', 'roles.id = users.role_id', 'left')
             ->join('departments', 'departments.id = users.department_id', 'left')
-            ->where('users.role_id !=', 1) // Exclude superadmin
-            ->orderBy('users.id', 'ASC')
-            ->findAll();
+            ->where('users.role_id !=','1')
+            ->orderBy('users.id', 'ASC');
+
+        $roleId = session()->get('role_id');
+        $departmentId = session()->get('department_id');
+
+        // If current user is NOT superadmin or admin, restrict by department
+        if (!in_array($roleId, [1, 2])) {
+            $builder->where('users.department_id', $departmentId);
+        }
+
+        return $builder->findAll();
     }
 }

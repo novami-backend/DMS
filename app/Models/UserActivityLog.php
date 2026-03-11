@@ -34,7 +34,7 @@ class UserActivityLog extends Model
 
     public function getRecentActivity($limit = 100)
     {
-        return $this->select('user_activity_logs.*, users.username')
+        return $this->select('user_activity_logs.*, users.username,users.name')
             ->join('users', 'users.id = user_activity_logs.user_id')
             ->orderBy('timestamp', 'DESC')
             ->limit($limit)

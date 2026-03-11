@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Permissions - DMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
     <?= view('common/styles') ?>
     <style>
         .permission-badge {
@@ -14,6 +20,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container-fluid">
         <div class="row">
@@ -46,7 +53,7 @@
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     <?php endif; ?>
-                    
+
                     <?php if (session()->getFlashdata('error')): ?>
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
                             <i class="fas fa-exclamation-circle me-2"></i>
@@ -59,7 +66,7 @@
                     <div class="card">
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-hover">
+                                <table class="table table-hover" id="permission">
                                     <thead>
                                         <tr>
                                             <th>ID</th>
@@ -72,26 +79,26 @@
                                     </thead>
                                     <tbody>
                                         <?php foreach ($permissions as $permission): ?>
-                                        <tr>
-                                            <td><?= $permission['id'] ?></td>
-                                            <td><strong><?= esc($permission['permission_key']) ?></strong></td>
-                                            <td><?= esc($permission['description'] ?? 'No description') ?></td>
-                                            <td><?= date('d-m-Y', strtotime($permission['created_at'])) ?></td>
-                                            <td><?= date('d-m-Y', strtotime($permission['updated_at'])) ?></td>
-                                            <td>
-                                                <?php /*if ($can_edit_permissions):*/ ?>
-                                                <a href="<?= base_url('permissions/edit/' . $permission['id']) ?>" class="btn btn-sm btn-outline-primary btn-action">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                <?php /*endif;*/ ?>
-                                                <?php /*if ($can_delete_permissions):*/ ?>
-                                                <a href="#" class="btn btn-sm btn-outline-danger btn-action" 
-                                                   onclick="confirmDelete(<?= $permission['id'] ?>, '<?= esc($permission['permission_key']) ?>')">
-                                                    <i class="fas fa-trash"></i>
-                                                </a>
-                                                <?php /*endif;*/ ?>
-                                            </td>
-                                        </tr>
+                                            <tr>
+                                                <td><?= $permission['id'] ?></td>
+                                                <td><strong><?= esc($permission['permission_key']) ?></strong></td>
+                                                <td><?= esc($permission['description'] ?? 'No description') ?></td>
+                                                <td><?= date('d-m-Y', strtotime($permission['created_at'])) ?></td>
+                                                <td><?= date('d-m-Y', strtotime($permission['updated_at'])) ?></td>
+                                                <td>
+                                                    <?php /*if ($can_edit_permissions):*/ ?>
+                                                    <a href="<?= base_url('permissions/edit/' . $permission['id']) ?>" class="btn btn-sm btn-outline-primary btn-action">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                    <?php /*endif;*/ ?>
+                                                    <?php /*if ($can_delete_permissions):*/ ?>
+                                                    <a href="#" class="btn btn-sm btn-outline-danger btn-action"
+                                                        onclick="confirmDelete(<?= $permission['id'] ?>, '<?= esc($permission['permission_key']) ?>')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </a>
+                                                    <?php /*endif;*/ ?>
+                                                </td>
+                                            </tr>
                                         <?php endforeach; ?>
                                     </tbody>
                                 </table>
@@ -126,6 +133,20 @@
     <?= view('common/footer') ?>
     <?= view('common/scripts') ?>
     <script>
+        $(document).ready(function() {
+            $('#permission').DataTable({
+                "order": [
+                    [0, "desc"]
+                ], // sort by ID descending
+                "columnDefs": [{
+                        "orderable": false,
+                        "targets": 5
+                    } // disable ordering on Actions column
+                ],
+                "pageLength": 10
+            });
+        });
+
         function confirmDelete(permissionId, permissionName) {
             document.getElementById('deletePermissionName').textContent = permissionName;
             document.getElementById('confirmDeleteBtn').href = '<?= base_url('permissions/delete/') ?>' + permissionId;

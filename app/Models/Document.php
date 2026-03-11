@@ -39,7 +39,7 @@ class Document extends Model
 
     public function getDocumentsWithDetails()
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
@@ -63,7 +63,7 @@ class Document extends Model
 
     public function getDocumentsByStatus($status)
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
@@ -74,7 +74,7 @@ class Document extends Model
 
     public function getDocumentsByDepartment($departmentId)
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
@@ -85,7 +85,7 @@ class Document extends Model
 
     public function getDocumentsByType($typeId)
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
@@ -114,8 +114,8 @@ class Document extends Model
         foreach ($metadata as $meta) {
             $this->db->table('document_metadata')->insert([
                 'document_id' => $documentId,
-                'meta_key'    => $meta['key'],
-                'meta_value'  => $meta['value']
+                'meta_key' => $meta['key'],
+                'meta_value' => $meta['value']
             ]);
         }
     }
@@ -158,7 +158,7 @@ class Document extends Model
     public function getDocumentHistory($documentId)
     {
         return $this->db->table('document_versions')
-            ->select('document_versions.*, users.username as created_by_name')
+            ->select('document_versions.*, users.name as created_by_name')
             ->join('users', 'users.id = document_versions.created_by', 'left')
             ->where('document_id', $documentId)
             ->orderBy('created_at', 'DESC')
@@ -194,14 +194,14 @@ class Document extends Model
         $shareData['document_id'] = $documentId;
         $shareData['created_by'] = session()->get('user_id');
         $shareData['created_at'] = date('Y-m-d H:i:s');
-            
+
         return $this->db->table('document_shares')->insert($shareData);
     }
 
     // public function getDocumentShares($documentId)
     // {
     //     return $this->db->table('document_shares')
-    //         ->select('document_shares.*, users.username as shared_with_user_name, roles.role_name as shared_with_role_name, departments.name as shared_with_department_name')
+    //         ->select('document_shares.*, users.name as shared_with_user_name, roles.role_name as shared_with_role_name, departments.name as shared_with_department_name')
     //         ->join('users', 'users.id = document_shares.shared_with_user_id', 'left')
     //         ->join('roles', 'roles.id = document_shares.shared_with_role_id', 'left')
     //         ->join('departments', 'departments.id = document_shares.shared_with_department_id', 'left')
@@ -214,7 +214,7 @@ class Document extends Model
     {
         return $this->db->table('document_shares ds')
             ->select('ds.*, 
-                  u.username as shared_with_user_name, 
+                  u.name as shared_with_user_name, 
                   r.role_name as shared_with_role_name, 
                   dpt.name as shared_with_department_name,
                   cb.name as created_by_name')
@@ -230,7 +230,7 @@ class Document extends Model
     // Search Methods
     public function searchDocuments($searchTerm, $filters = [])
     {
-        $builder = $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        $builder = $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left');
@@ -273,7 +273,7 @@ class Document extends Model
     public function getDocumentWorkflows($documentId)
     {
         return $this->db->table('document_workflows')
-            ->select('document_workflows.*, users.username as assigned_to_name')
+            ->select('document_workflows.*, users.name as assigned_to_name')
             ->join('users', 'users.id = document_workflows.assigned_to', 'left')
             ->where('document_id', $documentId)
             ->orderBy('created_at', 'DESC')
@@ -320,6 +320,20 @@ class Document extends Model
             ->getResultArray();
     }
 
+    private function sendNotification($recipientId, $message, $documentId, $type = 'document_action')
+    {
+        $notificationModel = new \App\Models\NotificationModel();
+        return $notificationModel->createNotification([
+            'recipient_id' => $recipientId,
+            'user_id' => session()->get('user_id') ?? 1,
+            'type' => $type,
+            'message' => $message,
+            'link_url' => base_url('documents/view/' . $documentId),
+            'priority' => 'medium',
+            'category' => 'system'
+        ]);
+    }
+
     // Simple Approval System Methods
     public function submitForReview($documentId, $reviewerId, $userId)
     {
@@ -338,7 +352,7 @@ class Document extends Model
         return $result;
     }
 
-    public function reviewDocument($documentId, $action, $comments, $userId)
+    public function reviewDocument($documentId, $action, $comments, $userId, $targetUserId = null)
     {
         $updateData = [
             'reviewer_comments' => $comments,
@@ -346,12 +360,12 @@ class Document extends Model
         ];
 
         if ($action === 'approve_for_final') {
-            $updateData['approval_status'] = 'reviewed';
+            $updateData['approval_status'] = 'sent_for_approval';
         } elseif ($action === 'reject') {
             $updateData['approval_status'] = 'rejected';
             $updateData['rejection_reason'] = $comments;
             $updateData['rejected_at'] = date('Y-m-d H:i:s');
-        } elseif ($action === 'return_for_revision') {
+        } elseif ($action === 'return_to_creator' || $action === 'return_for_revision') {
             $updateData['approval_status'] = 'returned_for_revision';
             $updateData['revision_comments'] = $comments;
             $updateData['returned_for_revision_at'] = date('Y-m-d H:i:s');
@@ -364,6 +378,21 @@ class Document extends Model
 
         if ($result) {
             $this->logApprovalAction($documentId, $action, $userId, $comments);
+
+            $document = $this->find($documentId);
+            $creatorId = $document['created_by'];
+
+            if ($action === 'approve_for_final') {
+                // Notify approvers in the same department
+                $approvers = $this->getApproversByDepartment($document['department_id']);
+                foreach ($approvers as $approver) {
+                    $this->sendNotification($approver['id'], "Document '{$document['title']}' has been reviewed and is ready for your approval.", $documentId);
+                }
+            } elseif ($action === 'reject') {
+                $this->sendNotification($creatorId, "Document '{$document['title']}' has been rejected by the reviewer.", $documentId, 'document_rejected');
+            } elseif ($action === 'return_to_creator' || $action === 'return_for_revision') {
+                $this->sendNotification($creatorId, "Document '{$document['title']}' has been returned to you for revision.", $documentId, 'document_returned');
+            }
         }
 
         return $result;
@@ -388,20 +417,126 @@ class Document extends Model
         return $result;
     }
 
-    public function approveDocument($documentId, $comments, $userId)
+    public function approveDocument($documentId, $action, $comments, $userId, $targetUserId = null)
     {
         $updateData = [
-            'approval_status' => 'approved_by_approver',
-            'approver_id' => $userId,
             'approver_comments' => $comments,
-            'approved_at' => date('Y-m-d H:i:s'),
-            'status' => 'active' // Activate the document
+            'approved_at' => date('Y-m-d H:i:s')
         ];
+
+        if ($action === 'approve') {
+            $updateData['approval_status'] = 'approved_by_approver';
+            $updateData['approver_id'] = $userId;
+            $updateData['status'] = 'active'; // This might be final for some contexts, but dashboard expects admin_approved for final
+        } elseif ($action === 'return_to_reviewer') {
+            // move back to reviewer but mark as returned for revision so it shows in the correct dashboard tab
+            $updateData['approval_status'] = 'returned_for_revision';
+            $updateData['returned_for_revision_at'] = date('Y-m-d H:i:s');
+            $updateData['revision_comments'] = $comments;
+            // bump revision count as it's going back
+            $document = $this->find($documentId);
+            $updateData['revision_count'] = ($document['revision_count'] ?? 0) + 1;
+            if ($targetUserId) {
+                $updateData['reviewer_id'] = $targetUserId;
+            }
+        } elseif ($action === 'return_to_creator') {
+            $updateData['approval_status'] = 'returned_for_revision';
+            $updateData['revision_comments'] = $comments;
+            $updateData['returned_for_revision_at'] = date('Y-m-d H:i:s');
+            $document = $this->find($documentId);
+            $updateData['revision_count'] = ($document['revision_count'] ?? 0) + 1;
+        }
 
         $result = $this->update($documentId, $updateData);
 
         if ($result) {
-            $this->logApprovalAction($documentId, 'approved', $userId, $comments);
+            $this->logApprovalAction($documentId, $action, $userId, $comments);
+
+            $document = $this->find($documentId);
+            $creatorId = $document['created_by'];
+
+            if ($action === 'approve') {
+                // Notify admins for final approval
+                $this->sendNotification(1, "Document '{$document['title']}' has been approved by the approver and needs final admin approval.", $documentId);
+            } elseif ($action === 'return_to_reviewer') {
+                if ($targetUserId) {
+                    $this->sendNotification($targetUserId, "Document '{$document['title']}' has been returned to you for further review.", $documentId);
+                }
+            } elseif ($action === 'return_to_creator') {
+                $this->sendNotification($creatorId, "Document '{$document['title']}' has been returned to you for revision by the approver.", $documentId, 'document_returned');
+            }
+        }
+
+        return $result;
+    }
+
+    public function adminApprove($documentId, $action, $comments, $userId, $targetUserId = null)
+    {
+        $updateData = [
+            'approver_comments' => $comments, // Reusing approver comments for admin if needed or add admin_comments
+            'approved_at' => date('Y-m-d H:i:s')
+        ];
+
+        if ($action === 'final_approve') {
+            $updateData['approval_status'] = 'admin_approved';
+            $updateData['status'] = 'active';
+        } elseif ($action === 'return_to_approver') {
+            $updateData['approval_status'] = 'reviewed'; // 'reviewed' means it's with Approver
+            if ($targetUserId) {
+                $updateData['approver_id'] = $targetUserId;
+            }
+        } elseif ($action === 'return_to_reviewer') {
+            // admin returning to reviewer – treat as revision
+            $updateData['approval_status'] = 'returned_for_revision';
+            $updateData['returned_for_revision_at'] = date('Y-m-d H:i:s');
+            $updateData['revision_comments'] = $comments;
+            $document = $this->find($documentId);
+            $updateData['revision_count'] = ($document['revision_count'] ?? 0) + 1;
+            if ($targetUserId) {
+                $updateData['reviewer_id'] = $targetUserId;
+            }
+        } elseif ($action === 'return_to_creator') {
+            $updateData['approval_status'] = 'returned_for_revision';
+            $updateData['revision_comments'] = $comments;
+            $updateData['returned_for_revision_at'] = date('Y-m-d H:i:s');
+            $document = $this->find($documentId);
+            $updateData['revision_count'] = ($document['revision_count'] ?? 0) + 1;
+        } elseif ($action === 'reject') {
+            $updateData['approval_status'] = 'rejected';
+            $updateData['rejection_reason'] = $comments;
+            $updateData['rejected_at'] = date('Y-m-d H:i:s');
+        }
+
+        $result = $this->update($documentId, $updateData);
+
+        if ($result) {
+            $this->logApprovalAction($documentId, $action, $userId, $comments);
+
+            $document = $this->find($documentId);
+            $creatorId = $document['created_by'];
+
+            if ($action === 'final_approve') {
+                $this->sendNotification($creatorId, "Your document '{$document['title']}' has been finally approved and is now active.", $documentId, 'document_approved');
+                // Also notify reviewer and approver
+                if (!empty($document['reviewer_id'])) {
+                    $this->sendNotification($document['reviewer_id'], "Document '{$document['title']}' has been finally approved by Admin.", $documentId);
+                }
+                if (!empty($document['approver_id'])) {
+                    $this->sendNotification($document['approver_id'], "Document '{$document['title']}' has been finally approved by Admin.", $documentId);
+                }
+            } elseif ($action === 'return_to_approver') {
+                if ($targetUserId) {
+                    $this->sendNotification($targetUserId, "Document '{$document['title']}' has been returned to you by the Admin.", $documentId);
+                }
+            } elseif ($action === 'return_to_reviewer') {
+                if ($targetUserId) {
+                    $this->sendNotification($targetUserId, "Document '{$document['title']}' has been returned to you by the Admin.", $documentId);
+                }
+            } elseif ($action === 'return_to_creator') {
+                $this->sendNotification($creatorId, "Document '{$document['title']}' has been returned to you for revision by the Admin.", $documentId, 'document_returned');
+            } elseif ($action === 'reject') {
+                $this->sendNotification($creatorId, "Document '{$document['title']}' has been rejected by the Admin.", $documentId, 'document_rejected');
+            }
         }
 
         return $result;
@@ -429,21 +564,47 @@ class Document extends Model
         $statusMap = [
             'submitted_for_review' => 'sent_for_review',
             'reviewed' => 'reviewed',
+            'approve_for_final' => 'reviewed', // Reviewer approves, it moves to 'reviewed'
             'submitted_for_approval' => 'approved',
-            'approved' => 'approved',
+            'approve' => 'approved_by_approver', // Approver approves
+            'final_approve' => 'admin_approved',
+            'approved' => 'admin_approved',
             'rejected' => 'rejected',
+            'reject' => 'rejected',
             'return_for_revision' => 'returned_for_revision',
+            'return_to_creator' => 'returned_for_revision',
+            'return_to_reviewer' => 'returned_for_revision',
+            'return_to_approver' => 'reviewed',
             'resubmitted_after_revision' => 'pending'
         ];
 
         return $statusMap[$action] ?? 'pending';
     }
 
+    /**
+     * Resubmit a document after it was returned for revision
+     */
+    public function resubmitDocument($documentId, $userId)
+    {
+        $result = $this->update($documentId, [
+            'approval_status' => 'pending',
+            'reviewer_id' => null,
+            'reviewer_comments' => null,
+            'reviewed_at' => null
+        ]);
+
+        if ($result) {
+            $this->logApprovalAction($documentId, 'resubmitted_after_revision', $userId, 'Document resubmitted after revision');
+        }
+
+        return $result;
+    }
+
     // Public method to log approval actions
     public function logApprovalAction($documentId, $action, $userId, $comments = '')
     {
         $document = $this->find($documentId);
-        
+
         $logData = [
             'document_id' => $documentId,
             'action' => $action,
@@ -470,19 +631,19 @@ class Document extends Model
 
     public function getDocumentsForReview($userId)
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
             ->where('documents.reviewer_id', $userId)
-            ->where('documents.approval_status', 'sent_for_review')
+            ->whereIn('documents.approval_status', ['sent_for_review', 'returned_for_revision'])
             ->orderBy('documents.submitted_for_review_at', 'ASC')
             ->findAll();
     }
 
     public function getDocumentsForApproval($userId)
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
@@ -494,7 +655,7 @@ class Document extends Model
 
     public function getPendingDocuments()
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.username as created_by_name')
+        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, users.name as created_by_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
@@ -503,18 +664,27 @@ class Document extends Model
             ->findAll();
     }
 
-    public function getDocumentsByApprovalStatus($status)
+    public function getDocumentsByApprovalStatus($status, $roleId, $departmentId)
     {
-        return $this->select('documents.*, document_types.name as type_name, departments.name as department_name, 
-                            users.name as created_by_name, reviewer.name as reviewer_name, 
-                            approver.name as approver_name')
+        $builder = $this->select('documents.*, 
+                              document_types.name as type_name, 
+                              departments.name as department_name, 
+                              users.name as created_by_name, 
+                              reviewer.name as reviewer_name, 
+                              approver.name as approver_name')
             ->join('document_types', 'document_types.id = documents.type_id', 'left')
             ->join('departments', 'departments.id = documents.department_id', 'left')
             ->join('users', 'users.id = documents.created_by', 'left')
             ->join('users as reviewer', 'reviewer.id = documents.reviewer_id', 'left')
             ->join('users as approver', 'approver.id = documents.approver_id', 'left')
-            ->where('documents.approval_status', $status)
-            ->orderBy('documents.created_at', 'DESC')
+            ->where('documents.approval_status', $status);
+
+        // Apply department filter for non-admin/superadmin
+        if (!in_array($roleId, [1, 2]) && $departmentId !== null) {
+            $builder->where('documents.department_id', $departmentId);
+        }
+
+        return $builder->orderBy('documents.created_at', 'DESC')
             ->findAll();
     }
 

@@ -115,7 +115,7 @@
                 <div class="card-body py-2 px-3">
                   <div class="d-grid gap-2">
                     <a href="<?= base_url('notifications') ?>" class="btn btn-sm btn-secondary mt-3">
-                      <i class="fas fa-arrow-left me-1"></i>Back to Notifications
+                      <i class="fas fa-arrow-left me-1"></i>View All Notifications
                     </a>
                   </div>
                 </div>

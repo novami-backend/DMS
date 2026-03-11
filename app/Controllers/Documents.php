@@ -63,7 +63,7 @@ class Documents extends BaseController
     {
         $userId = $userId ?? session()->get('user_id');
         $role = $this->getUserRoleForUser($userId);
-        return in_array($role, ['superadmin', 'admin']);
+        return in_array($role, ['superadmin', 'admin', 'dept_admin']);
     }
 
     private function isLabManager($userId = null)
@@ -152,36 +152,35 @@ class Documents extends BaseController
         // Apply role-based filtering
         if (!$this->isSuperAdmin($userId)) {
             if ($roleId == 1 || $roleId == 2) { // Admin role
-            // Admin can see all documents
-            }
-            else {
+                // Admin can see all documents
+            } else {
                 // Other roles can only see documents from their department
                 $builder->where('d.department_id', $userDepartmentId);
             }
         }
 
         $documents = $builder->orderBy('d.created_at', 'DESC')->get()->getResultArray();
-        
+
         // Group documents hierarchically: Type -> Department -> Documents
         $groupedDocuments = [];
         foreach ($documents as $doc) {
             $typeId = $doc['type_id'];
             $deptId = $doc['department_id'];
-            
+
             if (!isset($groupedDocuments[$typeId])) {
                 $groupedDocuments[$typeId] = [
                     'name' => $doc['type_name'],
                     'departments' => []
                 ];
             }
-            
+
             if (!isset($groupedDocuments[$typeId]['departments'][$deptId])) {
                 $groupedDocuments[$typeId]['departments'][$deptId] = [
                     'name' => $doc['department_name'],
                     'documents' => []
                 ];
             }
-            
+
             $groupedDocuments[$typeId]['departments'][$deptId]['documents'][] = $doc;
         }
 
@@ -246,11 +245,16 @@ class Documents extends BaseController
         $fields = $template ? $fieldModel->getFieldsBySection($template['id']) : [];
         $formData = isset($document['form_data']) && $document['form_data'] ? json_decode($document['form_data'], true) : [];
 
+        $reviewers = $this->documentModel->getReviewersByDepartment($document['department_id']);
+        $approvers = $this->documentModel->getApproversByDepartment($document['department_id']);
+
         $data = [
             'document' => $document,
             'template' => $template,
             'fields' => $fields,
             'formData' => $formData,
+            'reviewers' => $reviewers,
+            'approvers' => $approvers,
             'username' => session()->get('username'),
             'role_name' => $this->getUserRole()
         ];
@@ -286,14 +290,29 @@ class Documents extends BaseController
         }
 
         $documentTypes = $this->documentTypeModel->findAll();
-        $departments = $this->departmentModel->findAll();
+
+        $roleId = session()->get('role_id');
+        $departmentId = session()->get('department_id');
+
+        // Filter departments based on role
+        if (in_array($roleId, [1, 2])) {
+            // Superadmin or Admin → all departments
+            $departments = $this->departmentModel->findAll();
+        } else {
+            // Other roles → only their own department
+            $departments = $this->departmentModel->where('id', $departmentId)->findAll();
+        }
 
         $data = [
             'documentTypes' => $documentTypes,
-            'departments' => $departments,
-            'username' => session()->get('username'),
-            'role_name' => $this->getUserRole()
+            'departments'   => $departments,
+            'username'      => session()->get('username'),
+            'role_name'     => $this->getUserRole()
         ];
+
+        // log access to the creation form
+        $this->logModel->logActivity(session()->get('user_id'), 'Opened document creation form');
+
         return view('documents/create', $data);
     }
 
@@ -399,8 +418,7 @@ class Documents extends BaseController
             preg_match('/\/(\d+)$/', $lastDoc['document_number'], $matches);
             $lastNumber = isset($matches[1]) ? intval($matches[1]) : 0;
             $nextNumber = $lastNumber + 1;
-        }
-        else {
+        } else {
             $nextNumber = 1;
         }
 
@@ -424,8 +442,8 @@ class Documents extends BaseController
         $content = preg_replace_callback(
             '/(<td[^>]*>.*?Doc\.\s*No\.?.*?<\/td>\s*<td[^>]*>(?:<span[^>]*>)?)([A-Z\/]+\/\d+(?:\/\d+)?)(?:<\/span>)?(<\/td>)/i',
             function ($matches) use ($newDocNumber) {
-            return $matches[1] . $newDocNumber . $matches[3];
-        },
+                return $matches[1] . $newDocNumber . $matches[3];
+            },
             $content
         );
 
@@ -468,13 +486,11 @@ class Documents extends BaseController
         if (preg_match('/<span[^>]*style=["\']([^"\']*font[^"\']*)["\'][^>]*>/i', $content, $styleMatches)) {
             $fontStyle = ' style="' . $styleMatches[1] . '"';
             $debug['font_style_detected'] = $styleMatches[1];
-        }
-        elseif (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $content, $styleMatches)) {
+        } elseif (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $content, $styleMatches)) {
             // Get any existing span style from the table
             $fontStyle = ' style="' . $styleMatches[1] . '"';
             $debug['generic_style_detected'] = $styleMatches[1];
-        }
-        else {
+        } else {
             $debug['style_detected'] = false;
         }
 
@@ -491,24 +507,22 @@ class Documents extends BaseController
                 1
             );
             $nameReplaced = true;
-        }
-        else {
+        } else {
             // Create new span if it doesn't exist
             $content = preg_replace_callback(
                 '/(<table[^>]*id=["\']/[a-z0-9]+-approval-table/i["\'][^>]*>.*?<tr[^>]*>.*?<td[^>]*>.*?Name:.*?<\/td>\s*<td[^>]*>)(&nbsp;|\s*|<span[^>]*>.*?<\/span>)(<\/td>)/is',
                 function ($matches) use ($userName, $fontStyle, &$nameReplaced) {
-                $nameReplaced = true;
-                // Check if there's existing styling in the original content
-                $existingStyle = '';
-                if (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $matches[2], $styleMatch)) {
-                    $existingStyle = ' style="' . $styleMatch[1] . '"';
-                }
-                else {
-                    $existingStyle = $fontStyle;
-                }
+                    $nameReplaced = true;
+                    // Check if there's existing styling in the original content
+                    $existingStyle = '';
+                    if (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $matches[2], $styleMatch)) {
+                        $existingStyle = ' style="' . $styleMatch[1] . '"';
+                    } else {
+                        $existingStyle = $fontStyle;
+                    }
 
-                return $matches[1] . '<span id="prepared-by-name"' . $existingStyle . '>' . $userName . '</span>' . $matches[3];
-            },
+                    return $matches[1] . '<span id="prepared-by-name"' . $existingStyle . '>' . $userName . '</span>' . $matches[3];
+                },
                 $content,
                 1
             );
@@ -516,8 +530,7 @@ class Documents extends BaseController
 
         if ($nameReplaced) {
             $debug['name_replaced'] = true;
-        }
-        else {
+        } else {
             $debug['name_replaced'] = false;
         }
 
@@ -534,24 +547,22 @@ class Documents extends BaseController
                 1
             );
             $designationReplaced = true;
-        }
-        else {
+        } else {
             // Create new span if it doesn't exist
             $content = preg_replace_callback(
                 '/(<table[^>]*id=["\']/[a-z0-9]+-approval-table/i["\'][^>]*>.*?<tr[^>]*>.*?<td[^>]*>.*?Designation:.*?<\/td>\s*<td[^>]*>)(&nbsp;|\s*|<span[^>]*>.*?<\/span>)(<\/td>)/is',
                 function ($matches) use ($userRole, $fontStyle, &$designationReplaced) {
-                $designationReplaced = true;
-                // Check if there's existing styling in the original content
-                $existingStyle = '';
-                if (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $matches[2], $styleMatch)) {
-                    $existingStyle = ' style="' . $styleMatch[1] . '"';
-                }
-                else {
-                    $existingStyle = $fontStyle;
-                }
+                    $designationReplaced = true;
+                    // Check if there's existing styling in the original content
+                    $existingStyle = '';
+                    if (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $matches[2], $styleMatch)) {
+                        $existingStyle = ' style="' . $styleMatch[1] . '"';
+                    } else {
+                        $existingStyle = $fontStyle;
+                    }
 
-                return $matches[1] . '<span id="prepared-by-designation"' . $existingStyle . '>' . $userRole . '</span>' . $matches[3];
-            },
+                    return $matches[1] . '<span id="prepared-by-designation"' . $existingStyle . '>' . $userRole . '</span>' . $matches[3];
+                },
                 $content,
                 1
             );
@@ -559,8 +570,7 @@ class Documents extends BaseController
 
         if ($designationReplaced) {
             $debug['designation_replaced'] = true;
-        }
-        else {
+        } else {
             $debug['designation_replaced'] = false;
         }
 
@@ -577,24 +587,22 @@ class Documents extends BaseController
                 1
             );
             $signReplaced = true;
-        }
-        else {
+        } else {
             // Create new span if it doesn't exist
             $content = preg_replace_callback(
                 '/(<table[^>]*id=["\']/[a-z0-9]+-approval-table/i["\'][^>]*>.*?<tr[^>]*>.*?<td[^>]*>.*?Signature:.*?<\/td>\s*<td[^>]*>)(&nbsp;|\s*|<span[^>]*>.*?<\/span>)(<\/td>)/is',
                 function ($matches) use ($sign, $fontStyle, &$signReplaced) {
-                $signReplaced = true;
-                // Check if there's existing styling in the original content
-                $existingStyle = '';
-                if (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $matches[2], $styleMatch)) {
-                    $existingStyle = ' style="' . $styleMatch[1] . '"';
-                }
-                else {
-                    $existingStyle = $fontStyle;
-                }
+                    $signReplaced = true;
+                    // Check if there's existing styling in the original content
+                    $existingStyle = '';
+                    if (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $matches[2], $styleMatch)) {
+                        $existingStyle = ' style="' . $styleMatch[1] . '"';
+                    } else {
+                        $existingStyle = $fontStyle;
+                    }
 
-                return $matches[1] . '<span id="prepared-by-sign"' . $existingStyle . '>' . $sign . '</span>' . $matches[3];
-            },
+                    return $matches[1] . '<span id="prepared-by-sign"' . $existingStyle . '>' . $sign . '</span>' . $matches[3];
+                },
                 $content,
                 1
             );
@@ -602,8 +610,7 @@ class Documents extends BaseController
 
         if ($signReplaced) {
             $debug['signature_replaced'] = true;
-        }
-        else {
+        } else {
             $debug['signature_replaced'] = false;
         }
 
@@ -638,8 +645,7 @@ class Documents extends BaseController
         $fontStyle = '';
         if (preg_match('/<span[^>]*style=["\']([^"\']*font[^"\']*)["\'][^>]*>/i', $content, $styleMatches)) {
             $fontStyle = ' style="' . $styleMatches[1] . '"';
-        }
-        elseif (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $content, $styleMatches)) {
+        } elseif (preg_match('/<span[^>]*style=["\']([^"\']*)["\'][^>]*>/i', $content, $styleMatches)) {
             $fontStyle = ' style="' . $styleMatches[1] . '"';
         }
 
@@ -693,12 +699,10 @@ class Documents extends BaseController
                     );
                     log_message('info', 'replaceApprovalInfo: Successfully replaced reviewer signature');
                 }
-            }
-            else {
+            } else {
                 log_message('warning', 'replaceApprovalInfo: Reviewer not found for ID: ' . $document['reviewer_id']);
             }
-        }
-        else {
+        } else {
             log_message('info', 'replaceApprovalInfo: No reviewer_id set, skipping Reviewed By column');
         }
 
@@ -752,12 +756,10 @@ class Documents extends BaseController
                     );
                     log_message('info', 'replaceApprovalInfo: Successfully replaced approver signature');
                 }
-            }
-            else {
+            } else {
                 log_message('warning', 'replaceApprovalInfo: Approver not found for ID: ' . $document['approver_id']);
             }
-        }
-        else {
+        } else {
             log_message('info', 'replaceApprovalInfo: No approver_id set, skipping Approved By column');
         }
 
@@ -879,33 +881,33 @@ class Documents extends BaseController
         $content = preg_replace_callback(
             '/<img([^>]*?)src=["\']([^"\']+)["\']([^>]*?)>/i',
             function ($matches) {
-            $beforeSrc = $matches[1];
-            $src = $matches[2];
-            $afterSrc = $matches[3];
+                $beforeSrc = $matches[1];
+                $src = $matches[2];
+                $afterSrc = $matches[3];
 
-            // Check if it's already an absolute URL (starts with http:// or https://)
-            if (preg_match('/^https?:\/\//i', $src)) {
-                return $matches[0]; // Already absolute, return as is
-            }
+                // Check if it's already an absolute URL (starts with http:// or https://)
+                if (preg_match('/^https?:\/\//i', $src)) {
+                    return $matches[0]; // Already absolute, return as is
+                }
 
-            // Check if it's a relative path to uploads folder
-            if (preg_match('/^\.\.\/+uploads\/documents\/images\/(.+)$/i', $src, $pathMatches)) {
-                // Convert to absolute URL
-                $filename = $pathMatches[1];
-                $absoluteUrl = base_url('uploads/documents/images/' . $filename);
-                return '<img' . $beforeSrc . 'src="' . $absoluteUrl . '"' . $afterSrc . '>';
-            }
+                // Check if it's a relative path to uploads folder
+                if (preg_match('/^\.\.\/+uploads\/documents\/images\/(.+)$/i', $src, $pathMatches)) {
+                    // Convert to absolute URL
+                    $filename = $pathMatches[1];
+                    $absoluteUrl = base_url('uploads/documents/images/' . $filename);
+                    return '<img' . $beforeSrc . 'src="' . $absoluteUrl . '"' . $afterSrc . '>';
+                }
 
-            // Check if it's already a proper relative path (starts with uploads/)
-            if (preg_match('/^uploads\/documents\/images\/(.+)$/i', $src)) {
-                // Convert to absolute URL
-                $absoluteUrl = base_url($src);
-                return '<img' . $beforeSrc . 'src="' . $absoluteUrl . '"' . $afterSrc . '>';
-            }
+                // Check if it's already a proper relative path (starts with uploads/)
+                if (preg_match('/^uploads\/documents\/images\/(.+)$/i', $src)) {
+                    // Convert to absolute URL
+                    $absoluteUrl = base_url($src);
+                    return '<img' . $beforeSrc . 'src="' . $absoluteUrl . '"' . $afterSrc . '>';
+                }
 
-            // Return original if no match
-            return $matches[0];
-        },
+                // Return original if no match
+                return $matches[0];
+            },
             $content
         );
 
@@ -946,8 +948,7 @@ class Documents extends BaseController
             if (!empty($document['content'])) {
                 $document['content'] = $this->replaceApprovalInfo($document['content'], $document);
             }
-        }
-        else {
+        } else {
             // Preview from form submission
             $formData = $this->request->getPost('form_data') ?? [];
             $document = [
@@ -999,6 +1000,9 @@ class Documents extends BaseController
             'role_name' => $this->getUserRole()
         ];
 
+        // record preview activity (new vs existing document)
+        $this->logModel->logActivity(session()->get('user_id'), 'Previewed document', 'Document ID: ' . ($id ?? 'new'));
+
         return view('documents/preview', $data);
     }
 
@@ -1044,6 +1048,9 @@ class Documents extends BaseController
             'username' => session()->get('username'),
             'role_name' => $this->getUserRole()
         ];
+
+        // log entry to edit page
+        $this->logModel->logActivity($userId, 'Opened document edit form', 'Document ID: ' . $id);
 
         return view('documents/edit', $data);
     }
@@ -1176,6 +1183,9 @@ class Documents extends BaseController
             'role_name' => $this->getUserRole()
         ];
 
+        // log that user is preparing to submit for review
+        $this->logModel->logActivity(session()->get('user_id'), 'Opened submit for review form', 'Document ID: ' . $id);
+
         return view('documents/submit_for_review', $data);
     }
 
@@ -1227,6 +1237,9 @@ class Documents extends BaseController
             'role_name' => $this->getUserRole()
         ];
 
+        // record that reviewer opened the review page
+        $this->logModel->logActivity($userId, 'Opened review page', 'Document ID: ' . $id);
+
         return view('documents/review', $data);
     }
 
@@ -1239,7 +1252,7 @@ class Documents extends BaseController
             return redirect()->back()->with('error', 'Please provide action and comments');
         }
 
-        $allowedActions = ['approve_for_final', 'reject', 'return_for_revision'];
+        $allowedActions = ['approve_for_final', 'reject', 'return_to_creator', 'return_for_revision'];
         if (!in_array($action, $allowedActions)) {
             return redirect()->back()->with('error', 'Invalid action');
         }
@@ -1250,11 +1263,12 @@ class Documents extends BaseController
             $actionText = [
                 'approve_for_final' => 'approved',
                 'reject' => 'rejected',
+                'return_to_creator' => 'returned to creator',
                 'return_for_revision' => 'returned for revision'
             ];
 
             $this->logModel->logActivity(session()->get('user_id'), 'Reviewed document', 'Document ID: ' . $id . ' - ' . $actionText[$action]);
-            return redirect()->to('/documents')->with('success', 'Document ' . $actionText[$action] . ' successfully');
+            return redirect()->to('/approval-dashboard')->with('success', 'Document ' . ($actionText[$action] ?? 'processed') . ' successfully');
         }
 
         return redirect()->back()->with('error', 'Failed to process review');
@@ -1271,8 +1285,11 @@ class Documents extends BaseController
 
         $userId = session()->get('user_id');
 
-        if (!$this->isSuperAdmin() && !$this->isAdmin()) {
-            if (!$this->isApprover() || $document['approver_id'] != $userId) {
+        if (!$this->isSuperAdmin() && !$this->isAdmin() && !$this->isLabManager()) {
+            if (!$this->isApprover()) {
+                return redirect()->to('/documents')->with('error', 'Only approvers can access approval');
+            }
+            if (!empty($document['approver_id']) && $document['approver_id'] != $userId) {
                 return redirect()->to('/documents')->with('error', 'You are not assigned to approve this document');
             }
         }
@@ -1280,13 +1297,20 @@ class Documents extends BaseController
         // Admins have final approval authority and can approve directly
         if ($this->isAdmin() || $this->isSuperAdmin()) {
             $approvalHistory = $this->documentModel->getApprovalHistory($id);
+            $reviewers = $this->documentModel->getReviewersByDepartment($document['department_id']);
+            $approvers = $this->documentModel->getApproversByDepartment($document['department_id']);
 
             $data = [
                 'document' => $document,
                 'approval_history' => $approvalHistory,
+                'reviewers' => $reviewers,
+                'approvers' => $approvers,
                 'username' => session()->get('username'),
                 'role_name' => $this->getUserRole()
             ];
+
+            // log that approver/admin opened approval form
+            $this->logModel->logActivity($userId, 'Opened approval page', 'Document ID: ' . $id);
 
             return view('documents/approve', $data);
         }
@@ -1298,34 +1322,29 @@ class Documents extends BaseController
     {
         $action = $this->request->getPost('action');
         $comments = $this->request->getPost('comments');
+        $targetUserId = $this->request->getPost('target_user_id');
 
         if (empty($action)) {
             return redirect()->back()->with('error', 'Please select an action');
         }
 
-        if ($action === 'approve') {
-            $result = $this->documentModel->approveDocument($id, $comments, session()->get('user_id'));
-            $message = 'Document approved successfully';
-            $logMessage = 'Approved document';
-        }
-        elseif ($action === 'reject') {
-            if (empty($comments)) {
-                return redirect()->back()->with('error', 'Please provide rejection reason');
-            }
-            $result = $this->documentModel->rejectDocument($id, $comments, session()->get('user_id'));
-            $message = 'Document rejected successfully';
-            $logMessage = 'Rejected document';
-        }
-        else {
-            return redirect()->back()->with('error', 'Invalid action');
+        $userId = session()->get('user_id');
+        $isAdmin = $this->isAdmin() || $this->isSuperAdmin();
+
+        if ($isAdmin) {
+            // Admin final approval logic
+            $result = $this->documentModel->adminApprove($id, $action, $comments, $userId, $targetUserId);
+        } else {
+            // Approver intermediate approval logic
+            $result = $this->documentModel->approveDocument($id, $action, $comments, $userId, $targetUserId);
         }
 
         if ($result) {
-            $this->logModel->logActivity(session()->get('user_id'), $logMessage, 'Document ID: ' . $id);
-            return redirect()->to('/documents')->with('success', $message);
+            $this->logModel->logActivity($userId, 'Processed approval/return', 'Document ID: ' . $id . ' Action: ' . $action);
+            return redirect()->to('/approval-dashboard')->with('success', 'Action processed successfully');
         }
 
-        return redirect()->back()->with('error', 'Failed to process approval');
+        return redirect()->back()->with('error', 'Failed to process approval action');
     }
 
     public function myReviews()
@@ -1344,6 +1363,8 @@ class Documents extends BaseController
             'role_name' => $this->getUserRole(),
             'page_title' => 'My Reviews'
         ];
+
+        $this->logModel->logActivity($userId, 'Accessed my reviews list');
 
         return view('documents/my_reviews', $data);
     }
@@ -1365,23 +1386,40 @@ class Documents extends BaseController
             'page_title' => 'My Approvals'
         ];
 
+        $this->logModel->logActivity($userId, 'Accessed my approvals list');
+
         return view('documents/my_reviews', $data); // Reuse the same view
     }
 
     public function approvalDashboard()
     {
-        // Admin dashboard for monitoring all approvals
-        // if (!$this->isAdmin() && !$this->isSuperAdmin()) {
-        //     return redirect()->to('documents')->with('error', 'Access denied');
-        // }
+        $roleId       = session()->get('role_id');
+        $departmentId = session()->get('department_id');
 
-        $pendingDocuments = $this->documentModel->getDocumentsByApprovalStatus('pending');
-        $sentForReviewDocuments = $this->documentModel->getDocumentsByApprovalStatus('sent_for_review');
-        $sentForApprovalDocuments = $this->documentModel->getDocumentsByApprovalStatus('sent_for_approval');
-        $approvedByApproverDocuments = $this->documentModel->getDocumentsByApprovalStatus('approved_by_approver');
-        $adminApprovedDocuments = $this->documentModel->getDocumentsByApprovalStatus('admin_approved');
-        $returnedForRevisionDocuments = $this->documentModel->getDocumentsByApprovalStatus('returned_for_revision');
-        $rejectedDocuments = $this->documentModel->getDocumentsByApprovalStatus('rejected');
+        // Base query: get documents by status
+        // Apply department filter for non-admin/superadmin
+        $pendingDocuments = $this->documentModel->getDocumentsByApprovalStatus('pending', $roleId, $departmentId);
+        $sentForReviewDocuments = $this->documentModel->getDocumentsByApprovalStatus('sent_for_review', $roleId, $departmentId);
+        $sentForApprovalDocuments = $this->documentModel->getDocumentsByApprovalStatus('sent_for_approval', $roleId, $departmentId);
+        $approvedByApproverDocuments = $this->documentModel->getDocumentsByApprovalStatus('approved_by_approver', $roleId, $departmentId);
+        $adminApprovedDocuments = $this->documentModel->getDocumentsByApprovalStatus('admin_approved', $roleId, $departmentId);
+        $returnedForRevisionDocuments = $this->documentModel->getDocumentsByApprovalStatus('returned_for_revision', $roleId, $departmentId);
+        $rejectedDocuments = $this->documentModel->getDocumentsByApprovalStatus('rejected', $roleId, $departmentId);
+
+        // prepare lists of reviewers/approvers per document
+        $reviewerLists = [];
+        $approverLists = [];
+        foreach (array_merge($sentForApprovalDocuments, $returnedForRevisionDocuments) as $doc) {
+            $deptId = $doc['department_id'] ?? null;
+            if ($deptId) {
+                if (!isset($reviewerLists[$doc['id']])) {
+                    $reviewerLists[$doc['id']] = $this->documentModel->getReviewersByDepartment($deptId);
+                }
+                if (!isset($approverLists[$doc['id']])) {
+                    $approverLists[$doc['id']] = $this->documentModel->getApproversByDepartment($deptId);
+                }
+            }
+        }
 
         $data = [
             'pending_documents' => $pendingDocuments,
@@ -1391,13 +1429,15 @@ class Documents extends BaseController
             'admin_approved_documents' => $adminApprovedDocuments,
             'returned_for_revision_documents' => $returnedForRevisionDocuments,
             'rejected_documents' => $rejectedDocuments,
+            'reviewer_lists' => $reviewerLists,
+            'approver_lists' => $approverLists,
             'username' => session()->get('username'),
             'role_name' => $this->getUserRole(),
-            'page_title' => 'Approval Dashboard'
+            'page_title' => 'Approval Dashboard',
+            'notifications' => $this->notificationModel->getUnread(session()->get('user_id'))
         ];
-
-        $notifications = $this->notificationModel->getUnread(session()->get('user_id'));
-        $data['notifications'] = $notifications;
+        // track dashboard access
+        $this->logModel->logActivity(session()->get('user_id'), 'Accessed approval dashboard');
 
         return view('documents/approval_dashboard', $data);
     }
@@ -1428,6 +1468,8 @@ class Documents extends BaseController
             'username' => session()->get('username'),
             'role_name' => $this->getUserRole()
         ];
+
+        $this->logModel->logActivity(session()->get('user_id'), 'Viewed approval history', 'Document ID: ' . $id);
 
         return view('documents/approval_history', $data);
     }
@@ -1529,7 +1571,7 @@ class Documents extends BaseController
         $action = $this->request->getPost('action');
         $comments = $this->request->getPost('comments') ?? '';
 
-        if (!in_array($action, ['approve', 'reject'])) {
+        if (!in_array($action, ['approve', 'reject', 'return_to_creator', 'return_to_reviewer'])) {
             return $this->response->setJSON(['success' => false, 'message' => 'Invalid action']);
         }
 
@@ -1537,22 +1579,30 @@ class Documents extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Comments are required for rejection']);
         }
 
-        // Handle Approver approval (sent_for_approval → approved_by_approver)
+        // Handle Approver approval (sent_for_approval → approved_by_approver) or returns
         if ($document['approval_status'] === 'sent_for_approval') {
-            // Check if user is an approver
-            if (!$this->isApprover($userId)) {
-                return $this->response->setJSON(['success' => false, 'message' => 'Only approvers can approve documents. You do not have approver role.']);
+            // Only assigned approver (or lab_manager/superadmin) may act.  If no approver assigned, any approver may.
+            if (!$this->isSuperAdmin($userId) && !$this->isAdmin($userId) && !$this->isLabManager($userId)) {
+                if (!$this->isApprover($userId)) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Only approvers can approve documents']);
+                }
+                if (!empty($document['approver_id']) && $document['approver_id'] != $userId) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'You are not assigned to approve this document']);
+                }
             }
 
             if ($action === 'approve') {
-                $result = $this->documentModel->approveDocument($id, $comments, $userId);
+                $result = $this->documentModel->approveDocument($id, 'approve', $comments, $userId);
                 $message = 'Document approved successfully';
                 $logMessage = 'Approved document';
-            }
-            else {
+            } elseif ($action === 'reject') {
                 $result = $this->documentModel->rejectDocument($id, $comments, $userId);
                 $message = 'Document rejected successfully';
                 $logMessage = 'Rejected document';
+            } elseif (in_array($action, ['return_to_creator', 'return_to_reviewer'])) {
+                $result = $this->documentModel->approveDocument($id, $action, $comments, $userId, $this->request->getPost('target_user_id'));
+                $message = 'Document returned for revision';
+                $logMessage = 'Returned document';
             }
         }
         // Handle Admin final approval (approved_by_approver → admin_approved)
@@ -1563,23 +1613,16 @@ class Documents extends BaseController
             }
 
             if ($action === 'approve') {
-                // Update document to admin_approved status
-                $result = $this->documentModel->update($id, [
-                    'approval_status' => 'admin_approved',
-                    'approver_id' => $userId,
-                    'approved_at' => date('Y-m-d H:i:s'),
-                    'approver_comments' => $comments
-                ]);
+                // Use adminApprove to ensure status transition is logged
+                $result = $this->documentModel->adminApprove($id, 'final_approve', $comments, $userId);
                 $message = 'Document approved successfully';
                 $logMessage = 'Admin approved document';
-            }
-            else {
+            } else {
                 $result = $this->documentModel->rejectDocument($id, $comments, $userId);
                 $message = 'Document rejected successfully';
                 $logMessage = 'Admin rejected document';
             }
-        }
-        else {
+        } else {
             return $this->response->setJSON(['success' => false, 'message' => 'Document is not in a valid status for approval']);
         }
 
@@ -1663,17 +1706,10 @@ class Documents extends BaseController
             return redirect()->to('/documents')->with('error', 'You are not authorized to resubmit this document');
         }
 
-        // Reset the document to pending status for resubmission
-        $result = $this->documentModel->update($id, [
-            'approval_status' => 'pending',
-            'reviewer_id' => null,
-            'reviewer_comments' => null,
-            'reviewed_at' => null
-        ]);
+        // Reset the document to pending status for resubmission using model method
+        $result = $this->documentModel->resubmitDocument($id, $userId);
 
         if ($result) {
-            // Log the resubmission
-            $this->documentModel->logApprovalAction($id, 'resubmitted_after_revision', $userId, 'Document resubmitted after revision');
             $this->logModel->logActivity($userId, 'Resubmitted document after revision', 'Document ID: ' . $id);
 
             return redirect()->to('/approval-dashboard')->with('success', 'Document resubmitted successfully and is now pending review');
@@ -1805,14 +1841,12 @@ class Documents extends BaseController
                 return $this->response->setJSON([
                     'location' => $url
                 ]);
-            }
-            else {
+            } else {
                 return $this->response->setJSON([
                     'error' => 'Failed to upload file'
                 ])->setStatusCode(500);
             }
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return $this->response->setJSON([
                 'error' => 'Upload error: ' . $e->getMessage()
             ])->setStatusCode(500);
@@ -1848,21 +1882,16 @@ class Documents extends BaseController
         if ($templateId == 1) {
             // echo '*';die;
             return $this->exportPdfTemplate1($document);
-        }
-        elseif ($templateId == 2) {
+        } elseif ($templateId == 2) {
             // echo '**2';die;
             return $this->exportPdfTemplate2($document);
-        }
-        elseif ($templateId == 3) {
+        } elseif ($templateId == 3) {
             return $this->exportPdfTemplate3($document);
-        }
-        elseif ($templateId == 4) {
+        } elseif ($templateId == 4) {
             return $this->exportPdfTemplate4($document);
-        }
-        elseif ($templateId == 5) {
+        } elseif ($templateId == 5) {
             return $this->exportPdfTemplate5($document);
-        }
-        else {
+        } else {
             // Default formatting for unknown templates
             echo '****Default';
             // die;
@@ -1908,8 +1937,7 @@ class Documents extends BaseController
                 try {
                     \TCPDF_FONTS::addTTFfont($cambriaITTFPath, 'TrueTypeUnicode', '', 32, $tcpdfFontsDir);
                     error_log('Cambria Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria italic font error: ' . $e->getMessage());
                 }
             }
@@ -1918,8 +1946,7 @@ class Documents extends BaseController
                 try {
                     \TCPDF_FONTS::addTTFfont($cambriaBTTFPath, 'TrueTypeUnicode', '', 32, $tcpdfFontsDir);
                     error_log('Cambria Bold font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold font error: ' . $e->getMessage());
                 }
             }
@@ -1928,24 +1955,20 @@ class Documents extends BaseController
                 try {
                     \TCPDF_FONTS::addTTFfont($cambriaZTTFPath, 'TrueTypeUnicode', '', 32, $tcpdfFontsDir);
                     error_log('Cambria Bold Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold italic font error: ' . $e->getMessage());
                 }
             }
-        }
-        elseif (file_exists($cambriaTTFPath)) {
+        } elseif (file_exists($cambriaTTFPath)) {
             try {
                 $addedFontName = \TCPDF_FONTS::addTTFfont($cambriaTTFPath, 'TrueTypeUnicode', '', 32, $tcpdfFontsDir);
                 if ($addedFontName && $addedFontName !== false) {
                     $fontName = $addedFontName;
                     error_log('Cambria Regular font successfully added as: ' . $fontName);
-                }
-                else {
+                } else {
                     error_log('Failed to add Cambria Regular font - TCPDF returned false');
                 }
-            }
-            catch (\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('Cambria Regular font error: ' . $e->getMessage());
             }
         }
@@ -2014,8 +2037,7 @@ class Documents extends BaseController
             // Add border-collapse style to ensure borders render properly
             if (strpos($attributes, 'style=') === false) {
                 $attributes .= ' style="border-collapse: collapse; border: 1px solid #000;"';
-            }
-            else {
+            } else {
                 $attributes = preg_replace('/style="([^"]*)"/', 'style="$1 border-collapse: collapse; border: 1px solid #000;"', $attributes);
             }
             return '<table' . $attributes . '>';
@@ -2042,8 +2064,7 @@ class Documents extends BaseController
                     $newStyle .= ' width: ' . $width . ';';
                 }
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 $newStyle = 'padding: 2px 3px; border: 1px solid #000;';
                 if ($width) {
                     $newStyle .= ' width: ' . $width . ';';
@@ -2059,8 +2080,7 @@ class Documents extends BaseController
                 $existingStyle = $styleMatch[1];
                 $newStyle = $existingStyle . '; margin: 0px; padding: 0px; line-height: 1;';
                 return '<p' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 return '<p' . $attributes . ' style="margin: 0px; padding: 0px; line-height: 1;">';
             }
         }, $bodyContent);
@@ -2072,8 +2092,7 @@ class Documents extends BaseController
                 $existingStyle = $styleMatch[1];
                 $newStyle = $existingStyle . '; margin-bottom: 8px; line-height: 1.2;';
                 return '<li' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 return '<li' . $attributes . ' style="margin-bottom: 8px; line-height: 1.2;">';
             }
         }, $bodyContent);
@@ -2087,8 +2106,7 @@ class Documents extends BaseController
                 $existingStyle = $styleMatch[1];
                 $newStyle = $existingStyle . '; margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;';
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 return '<' . $tag . $attributes . ' style="margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;">';
             }
         }, $bodyContent);
@@ -2151,8 +2169,7 @@ class Documents extends BaseController
                 if ($this->pageCount > 1) {
                     $this->SetTopMargin(40);
                     $this->setHeaderMargin(5);
-                }
-                else {
+                } else {
                     // First page: increase header margin to prevent overlap
                     $this->setHeaderMargin(5);
                 }
@@ -2171,8 +2188,7 @@ class Documents extends BaseController
                 if (preg_match('/(<table[^>]*id=["\']([a-z0-9]+-header-table)["\'][^>]*>.*?<\/table>)/si', $documentContent, $matches)) {
                     $headerTable = $matches[1];
                     $tableId = $matches[2]; // Store the table ID for reference
-                }
-                else {
+                } else {
                     return; // No header table found, skip header
                 }
 
@@ -2314,8 +2330,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria italic font error: ' . $e->getMessage());
                 }
             }
@@ -2331,8 +2346,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold font error: ' . $e->getMessage());
                 }
             }
@@ -2348,13 +2362,11 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold italic font error: ' . $e->getMessage());
                 }
             }
-        }
-        elseif (file_exists($cambriaTTFPath)) {
+        } elseif (file_exists($cambriaTTFPath)) {
             try {
                 // Add Cambria Regular if not already present
                 $addedFontName = \TCPDF_FONTS::addTTFfont(
@@ -2368,12 +2380,10 @@ class Documents extends BaseController
                 if ($addedFontName && $addedFontName !== false) {
                     $fontName = $addedFontName;
                     error_log('Cambria Regular font successfully added as: ' . $fontName);
-                }
-                else {
+                } else {
                     error_log('Failed to add Cambria Regular font - TCPDF returned false');
                 }
-            }
-            catch (\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('Cambria Regular font error: ' . $e->getMessage());
             }
         }
@@ -2420,10 +2430,9 @@ class Documents extends BaseController
             $bodyContent = preg_replace('/font-family:\s*["\']?cambria["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?calibri["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?arial["\']?/i', 'font-family: ' . $fontName, $bodyContent);
-        }
-        else {
-        // Keep cambria in CSS so PDF viewers will request it
-        // Don't replace - let the PDF viewer handle font substitution
+        } else {
+            // Keep cambria in CSS so PDF viewers will request it
+            // Don't replace - let the PDF viewer handle font substitution
         }
 
         // Replace <strong><em> with Cambria Bold Italic
@@ -2497,8 +2506,7 @@ class Documents extends BaseController
                     $newStyle .= ' width: ' . $width . ';';
                 }
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute with padding and width
                 $newStyle = 'padding: 2px 3px; border: 1px solid #000;';
                 if ($width) {
@@ -2518,8 +2526,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - increased line-height to 1.8 for better readability
                 $newStyle = $existingStyle . '; margin: 0px; padding: 0px; line-height: 1;';
                 return '<p' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<p' . $attributes . ' style="margin: 0px; padding: 0px; line-height: 1;">';
             }
@@ -2534,8 +2541,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - negative margin-bottom to reduce gap
                 $newStyle = $existingStyle . '; margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;';
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<' . $tag . $attributes . ' style="margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;">';
             }
@@ -2603,8 +2609,7 @@ class Documents extends BaseController
                 if ($this->pageCount > 1) {
                     $this->SetTopMargin(50);
                     $this->setHeaderMargin(5);
-                }
-                else {
+                } else {
                     // First page: increase header margin to prevent overlap
                     $this->setHeaderMargin(5);
                 }
@@ -2623,8 +2628,7 @@ class Documents extends BaseController
                 if (preg_match('/(<table[^>]*id=["\']([a-z0-9]+-header-table)["\'][^>]*>.*?<\/table>)/si', $documentContent, $matches)) {
                     $headerTable = $matches[1];
                     $tableId = $matches[2]; // Store the table ID for reference
-                }
-                else {
+                } else {
                     return; // No header table found, skip header
                 }
 
@@ -2766,8 +2770,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria italic font error: ' . $e->getMessage());
                 }
             }
@@ -2783,8 +2786,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold font error: ' . $e->getMessage());
                 }
             }
@@ -2800,13 +2802,11 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold italic font error: ' . $e->getMessage());
                 }
             }
-        }
-        elseif (file_exists($cambriaTTFPath)) {
+        } elseif (file_exists($cambriaTTFPath)) {
             try {
                 // Add Cambria Regular if not already present
                 $addedFontName = \TCPDF_FONTS::addTTFfont(
@@ -2820,12 +2820,10 @@ class Documents extends BaseController
                 if ($addedFontName && $addedFontName !== false) {
                     $fontName = $addedFontName;
                     error_log('Cambria Regular font successfully added as: ' . $fontName);
-                }
-                else {
+                } else {
                     error_log('Failed to add Cambria Regular font - TCPDF returned false');
                 }
-            }
-            catch (\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('Cambria Regular font error: ' . $e->getMessage());
             }
         }
@@ -2872,10 +2870,9 @@ class Documents extends BaseController
             $bodyContent = preg_replace('/font-family:\s*["\']?cambria["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?calibri["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?arial["\']?/i', 'font-family: ' . $fontName, $bodyContent);
-        }
-        else {
-        // Keep cambria in CSS so PDF viewers will request it
-        // Don't replace - let the PDF viewer handle font substitution
+        } else {
+            // Keep cambria in CSS so PDF viewers will request it
+            // Don't replace - let the PDF viewer handle font substitution
         }
 
         // Replace <strong><em> with Cambria Bold Italic
@@ -2949,8 +2946,7 @@ class Documents extends BaseController
                     $newStyle .= ' width: ' . $width . ';';
                 }
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute with padding and width
                 $newStyle = 'padding: 2px 3px; border: 1px solid #000;';
                 if ($width) {
@@ -2970,8 +2966,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - increased line-height to 1.8 for better readability
                 $newStyle = $existingStyle . '; margin: 0px; padding: 0px; line-height: 1;';
                 return '<p' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<p' . $attributes . ' style="margin: 0px; padding: 0px; line-height: 1;">';
             }
@@ -2986,8 +2981,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - negative margin-bottom to reduce gap
                 $newStyle = $existingStyle . '; margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;';
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<' . $tag . $attributes . ' style="margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;">';
             }
@@ -3055,8 +3049,7 @@ class Documents extends BaseController
                 if ($this->pageCount > 1) {
                     $this->SetTopMargin(40);
                     $this->setHeaderMargin(5);
-                }
-                else {
+                } else {
                     // First page: increase header margin to prevent overlap
                     $this->setHeaderMargin(5);
                 }
@@ -3075,8 +3068,7 @@ class Documents extends BaseController
                 if (preg_match('/(<table[^>]*id=["\']([a-z0-9]+-header-table)["\'][^>]*>.*?<\/table>)/si', $documentContent, $matches)) {
                     $headerTable = $matches[1];
                     $tableId = $matches[2]; // Store the table ID for reference
-                }
-                else {
+                } else {
                     return; // No header table found, skip header
                 }
 
@@ -3218,8 +3210,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria italic font error: ' . $e->getMessage());
                 }
             }
@@ -3235,8 +3226,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold font error: ' . $e->getMessage());
                 }
             }
@@ -3252,13 +3242,11 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold italic font error: ' . $e->getMessage());
                 }
             }
-        }
-        elseif (file_exists($cambriaTTFPath)) {
+        } elseif (file_exists($cambriaTTFPath)) {
             try {
                 // Add Cambria Regular if not already present
                 $addedFontName = \TCPDF_FONTS::addTTFfont(
@@ -3272,12 +3260,10 @@ class Documents extends BaseController
                 if ($addedFontName && $addedFontName !== false) {
                     $fontName = $addedFontName;
                     error_log('Cambria Regular font successfully added as: ' . $fontName);
-                }
-                else {
+                } else {
                     error_log('Failed to add Cambria Regular font - TCPDF returned false');
                 }
-            }
-            catch (\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('Cambria Regular font error: ' . $e->getMessage());
             }
         }
@@ -3324,10 +3310,9 @@ class Documents extends BaseController
             $bodyContent = preg_replace('/font-family:\s*["\']?cambria["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?calibri["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?arial["\']?/i', 'font-family: ' . $fontName, $bodyContent);
-        }
-        else {
-        // Keep cambria in CSS so PDF viewers will request it
-        // Don't replace - let the PDF viewer handle font substitution
+        } else {
+            // Keep cambria in CSS so PDF viewers will request it
+            // Don't replace - let the PDF viewer handle font substitution
         }
 
         // Replace <strong><em> with Cambria Bold Italic
@@ -3401,8 +3386,7 @@ class Documents extends BaseController
                     $newStyle .= ' width: ' . $width . ';';
                 }
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute with padding and width
                 $newStyle = 'padding: 2px 3px; border: 1px solid #000;';
                 if ($width) {
@@ -3422,8 +3406,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - increased line-height to 1.8 for better readability
                 $newStyle = $existingStyle . '; margin: 0px; padding: 0px; line-height: 1;';
                 return '<p' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<p' . $attributes . ' style="margin: 0px; padding: 0px; line-height: 1;">';
             }
@@ -3438,8 +3421,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - negative margin-bottom to reduce gap
                 $newStyle = $existingStyle . '; margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;';
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<' . $tag . $attributes . ' style="margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;">';
             }
@@ -3507,8 +3489,7 @@ class Documents extends BaseController
                 if ($this->pageCount > 1) {
                     $this->SetTopMargin(10);
                     $this->setHeaderMargin(5);
-                }
-                else {
+                } else {
                     // First page: increase header margin to prevent overlap
                     $this->setHeaderMargin(1);
                 }
@@ -3527,8 +3508,7 @@ class Documents extends BaseController
                 if (preg_match('/(<table[^>]*id=["\']([a-z0-9]+-header-table)["\'][^>]*>.*?<\/table>)/si', $documentContent, $matches)) {
                     $headerTable = $matches[1];
                     $tableId = $matches[2]; // Store the table ID for reference
-                }
-                else {
+                } else {
                     return; // No header table found, skip header
                 }
 
@@ -3670,8 +3650,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria italic font error: ' . $e->getMessage());
                 }
             }
@@ -3687,8 +3666,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold font error: ' . $e->getMessage());
                 }
             }
@@ -3704,13 +3682,11 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold italic font error: ' . $e->getMessage());
                 }
             }
-        }
-        elseif (file_exists($cambriaTTFPath)) {
+        } elseif (file_exists($cambriaTTFPath)) {
             try {
                 // Add Cambria Regular if not already present
                 $addedFontName = \TCPDF_FONTS::addTTFfont(
@@ -3724,12 +3700,10 @@ class Documents extends BaseController
                 if ($addedFontName && $addedFontName !== false) {
                     $fontName = $addedFontName;
                     error_log('Cambria Regular font successfully added as: ' . $fontName);
-                }
-                else {
+                } else {
                     error_log('Failed to add Cambria Regular font - TCPDF returned false');
                 }
-            }
-            catch (\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('Cambria Regular font error: ' . $e->getMessage());
             }
         }
@@ -3758,8 +3732,7 @@ class Documents extends BaseController
                     $style .= '; border: 1px solid #000;';
                 }
                 $attributes = str_replace($styleMatch[0], 'style="' . $style . '"', $attributes);
-            }
-            else {
+            } else {
                 // No style attribute → add new one
                 $attributes .= ' style="padding: 2px 3px; border: 1px solid #000;"';
             }
@@ -3792,10 +3765,9 @@ class Documents extends BaseController
             $bodyContent = preg_replace('/font-family:\s*["\']?cambria["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?calibri["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?arial["\']?/i', 'font-family: ' . $fontName, $bodyContent);
-        }
-        else {
-        // Keep cambria in CSS so PDF viewers will request it
-        // Don't replace - let the PDF viewer handle font substitution
+        } else {
+            // Keep cambria in CSS so PDF viewers will request it
+            // Don't replace - let the PDF viewer handle font substitution
         }
 
         // Replace <strong><em> with Cambria Bold Italic
@@ -3869,8 +3841,7 @@ class Documents extends BaseController
                     $newStyle .= ' width: ' . $width . ';';
                 }
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute with padding and width
                 $newStyle = 'padding: 2px 3px; border: 1px solid #000;';
                 if ($width) {
@@ -3890,8 +3861,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - increased line-height to 1.8 for better readability
                 $newStyle = $existingStyle . '; margin: 0px; padding: 0px; line-height: 1;';
                 return '<p' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<p' . $attributes . ' style="margin: 0px; padding: 0px; line-height: 1;">';
             }
@@ -3906,8 +3876,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - negative margin-bottom to reduce gap
                 $newStyle = $existingStyle . '; margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;';
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<' . $tag . $attributes . ' style="margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;">';
             }
@@ -3975,8 +3944,7 @@ class Documents extends BaseController
                 if ($this->pageCount > 1) {
                     $this->SetTopMargin(10);
                     $this->setHeaderMargin(5);
-                }
-                else {
+                } else {
                     // First page: increase header margin to prevent overlap
                     $this->setHeaderMargin(1);
                 }
@@ -3995,8 +3963,7 @@ class Documents extends BaseController
                 if (preg_match('/(<table[^>]*id=["\']([a-z0-9]+-header-table)["\'][^>]*>.*?<\/table>)/si', $documentContent, $matches)) {
                     $headerTable = $matches[1];
                     $tableId = $matches[2]; // Store the table ID for reference
-                }
-                else {
+                } else {
                     return; // No header table found, skip header
                 }
 
@@ -4138,8 +4105,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria italic font error: ' . $e->getMessage());
                 }
             }
@@ -4155,8 +4121,7 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold font error: ' . $e->getMessage());
                 }
             }
@@ -4172,13 +4137,11 @@ class Documents extends BaseController
                         $tcpdfFontsDir
                     );
                     error_log('Cambria Bold Italic font successfully added');
-                }
-                catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                     error_log('Cambria bold italic font error: ' . $e->getMessage());
                 }
             }
-        }
-        elseif (file_exists($cambriaTTFPath)) {
+        } elseif (file_exists($cambriaTTFPath)) {
             try {
                 // Add Cambria Regular if not already present
                 $addedFontName = \TCPDF_FONTS::addTTFfont(
@@ -4192,12 +4155,10 @@ class Documents extends BaseController
                 if ($addedFontName && $addedFontName !== false) {
                     $fontName = $addedFontName;
                     error_log('Cambria Regular font successfully added as: ' . $fontName);
-                }
-                else {
+                } else {
                     error_log('Failed to add Cambria Regular font - TCPDF returned false');
                 }
-            }
-            catch (\Throwable $e) {
+            } catch (\Throwable $e) {
                 error_log('Cambria Regular font error: ' . $e->getMessage());
             }
         }
@@ -4226,8 +4187,7 @@ class Documents extends BaseController
                     $style .= '; border: 1px solid #000;';
                 }
                 $attributes = str_replace($styleMatch[0], 'style="' . $style . '"', $attributes);
-            }
-            else {
+            } else {
                 // No style attribute → add new one
                 $attributes .= ' style="padding: 2px 3px; border: 1px solid #000;"';
             }
@@ -4260,10 +4220,9 @@ class Documents extends BaseController
             $bodyContent = preg_replace('/font-family:\s*["\']?cambria["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?calibri["\']?/i', 'font-family: ' . $fontName, $bodyContent);
             $bodyContent = preg_replace('/font-family:\s*["\']?arial["\']?/i', 'font-family: ' . $fontName, $bodyContent);
-        }
-        else {
-        // Keep cambria in CSS so PDF viewers will request it
-        // Don't replace - let the PDF viewer handle font substitution
+        } else {
+            // Keep cambria in CSS so PDF viewers will request it
+            // Don't replace - let the PDF viewer handle font substitution
         }
 
         // Replace <strong><em> with Cambria Bold Italic
@@ -4337,8 +4296,7 @@ class Documents extends BaseController
                     $newStyle .= ' width: ' . $width . ';';
                 }
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute with padding and width
                 $newStyle = 'padding: 2px 3px; border: 1px solid #000;';
                 if ($width) {
@@ -4358,8 +4316,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - increased line-height to 1.8 for better readability
                 $newStyle = $existingStyle . '; margin: 0px; padding: 0px; line-height: 1;';
                 return '<p' . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<p' . $attributes . ' style="margin: 0px; padding: 0px; line-height: 1;">';
             }
@@ -4374,8 +4331,7 @@ class Documents extends BaseController
                 // Add margin and line-height to existing style - negative margin-bottom to reduce gap
                 $newStyle = $existingStyle . '; margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;';
                 return '<' . $tag . str_replace($styleMatch[0], 'style="' . $newStyle . '"', $attributes) . '>';
-            }
-            else {
+            } else {
                 // Add new style attribute
                 return '<' . $tag . $attributes . ' style="margin: 0px; margin-bottom: -3px; padding: 0px; line-height: 1;">';
             }
@@ -4566,8 +4522,8 @@ class Documents extends BaseController
         // Title
         $section->addText(
             $document['title'],
-        ['bold' => true, 'size' => 18, 'color' => '2c3e50'],
-        ['alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER, 'spaceAfter' => 200]
+            ['bold' => true, 'size' => 18, 'color' => '2c3e50'],
+            ['alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER, 'spaceAfter' => 200]
         );
 
         $section->addLine(['weight' => 1, 'width' => 450, 'height' => 0, 'color' => '3498db']);
@@ -4626,18 +4582,18 @@ class Documents extends BaseController
         exit;
     }
 
-// public function uploadImage()
-// {
-//     $file = $this->request->getFile('upload');
-//     if (!$file || !$file->isValid()) {
-//         return $this->response->setJSON(['error' => $file ? $file->getErrorString() : 'No file uploaded'])->setStatusCode(500);
-//     }
-//     $validTypes = ['jpg', 'jpeg', 'png', 'gif'];
-//     if (!in_array($file->getExtension(), $validTypes)) {
-//         return $this->response->setJSON(['error' => 'Invalid file type']);
-//     }
-//     $newName = $file->getRandomName();
-//     $file->move(FCPATH . 'uploads', $newName);
-//     return $this->response->setJSON(['location' => base_url('uploads/' . $newName)]);
-// }
+    // public function uploadImage()
+    // {
+    //     $file = $this->request->getFile('upload');
+    //     if (!$file || !$file->isValid()) {
+    //         return $this->response->setJSON(['error' => $file ? $file->getErrorString() : 'No file uploaded'])->setStatusCode(500);
+    //     }
+    //     $validTypes = ['jpg', 'jpeg', 'png', 'gif'];
+    //     if (!in_array($file->getExtension(), $validTypes)) {
+    //         return $this->response->setJSON(['error' => 'Invalid file type']);
+    //     }
+    //     $newName = $file->getRandomName();
+    //     $file->move(FCPATH . 'uploads', $newName);
+    //     return $this->response->setJSON(['location' => base_url('uploads/' . $newName)]);
+    // }
 }

@@ -33,4 +33,19 @@
             setTimeout(() => bsAlert.close(), 5000);
         });
     }, 1000);
+
+    // Initialize any Bootstrap dropdowns that use data-bs-toggle="dropdown".
+    function initDropdowns() {
+        var ddToggles = [].slice.call(document.querySelectorAll('.dropdown-toggle'));
+        ddToggles.forEach(function(el) {
+            new bootstrap.Dropdown(el);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDropdowns);
+    } else {
+        // DOMContentLoaded already fired
+        initDropdowns();
+    }
 </script>
