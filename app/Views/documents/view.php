@@ -333,43 +333,46 @@
                                 <div class="card-body">
                                     <?php if (!empty($fields) && !empty($formData)): ?>
                                         <!-- Display Form Data -->
-                                        <?php foreach ($fields as $section => $sectionFields): ?>
-                                            <h6 class="text-primary border-bottom pb-2 mb-3"><?= esc($section) ?></h6>
-                                            <?php foreach ($sectionFields as $field): ?>
-                                                <div class="mb-3">
-                                                    <strong><?= esc($field['field_label']) ?>:</strong>
-                                                    <div class="document-content mt-1">
-                                                        <?php
-                                                        $fieldName = $field['field_name'];
-                                                        $value = $formData[$fieldName] ?? '';
+                                        <?php if (is_array($fields)): ?>
+                                            <?php foreach ($fields as $section => $sectionFields): ?>
+                                                <h6 class="text-primary border-bottom pb-2 mb-3"><?= esc($section) ?></h6>
+                                                <?php if (is_array($sectionFields)): ?>
+                                                    <?php foreach ($sectionFields as $field): ?>
+                                                        <div class="mb-3">
+                                                            <strong><?= esc($field['field_label'] ?? '') ?>:</strong>
+                                                            <div class="document-content mt-1">
+                                                                <?php
+                                                                $fieldName = $field['field_name'] ?? '';
+                                                                $value = $formData[$fieldName] ?? '';
 
-                                                        if ($field['field_type'] === 'table' && is_array($value)) {
-                                                            // Render table data
-                                                            $columns = json_decode($field['options'], true);
-                                                            echo '<table class="table table-sm table-bordered">';
-                                                            echo '<thead><tr>';
-                                                            foreach ($columns as $col) {
-                                                                echo '<th>' . esc($col['label']) . '</th>';
-                                                            }
-                                                            echo '</tr></thead><tbody>';
-                                                            foreach ($value as $row) {
-                                                                echo '<tr>';
-                                                                foreach ($columns as $col) {
-                                                                    echo '<td>' . esc($row[$col['name']] ?? '') . '</td>';
+                                                                if (($field['field_type'] ?? '') === 'table' && is_array($value)) {
+                                                                    $columns = json_decode($field['options'] ?? '[]', true);
+                                                                    echo '<table class="table table-sm table-bordered">';
+                                                                    echo '<thead><tr>';
+                                                                    foreach ($columns as $col) {
+                                                                        echo '<th>' . esc($col['label'] ?? '') . '</th>';
+                                                                    }
+                                                                    echo '</tr></thead><tbody>';
+                                                                    foreach ($value as $row) {
+                                                                        echo '<tr>';
+                                                                        foreach ($columns as $col) {
+                                                                            echo '<td>' . esc($row[$col['name']] ?? '') . '</td>';
+                                                                        }
+                                                                        echo '</tr>';
+                                                                    }
+                                                                    echo '</tbody></table>';
+                                                                } elseif (($field['field_type'] ?? '') === 'checkbox') {
+                                                                    echo $value ? '<i class="fas fa-check-square text-success"></i> Yes' : '<i class="far fa-square"></i> No';
+                                                                } else {
+                                                                    echo nl2br(esc($value ?: 'N/A'));
                                                                 }
-                                                                echo '</tr>';
-                                                            }
-                                                            echo '</tbody></table>';
-                                                        } elseif ($field['field_type'] === 'checkbox') {
-                                                            echo $value ? '<i class="fas fa-check-square text-success"></i> Yes' : '<i class="far fa-square"></i> No';
-                                                        } else {
-                                                            echo nl2br(esc($value ?: 'N/A'));
-                                                        }
-                                                        ?>
-                                                    </div>
-                                                </div>
+                                                                ?>
+                                                            </div>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
                                             <?php endforeach; ?>
-                                        <?php endforeach; ?>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <!-- Display Regular Content -->
                                         <div class="document-content">
@@ -398,7 +401,7 @@
                                         <div class="list-group">
                                             <?php foreach ($attachments as $attachment): ?>
                                                 <div class="list-group-item">
-                                                    <?php 
+                                                    <?php
                                                     $ext = strtolower(pathinfo($attachment['file_path'], PATHINFO_EXTENSION));
                                                     if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])): ?>
                                                         <div class="mb-3 text-center bg-light p-2 border rounded">
@@ -423,7 +426,7 @@
                                                             </small>
                                                         </div>
                                                         <div>
-                                                            <?php 
+                                                            <?php
                                                             if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])): ?>
                                                                 <!-- <button type="button" class="btn btn-sm btn-info text-white ms-1" data-bs-toggle="modal" data-bs-target="#imageModal<?= $attachment['id'] ?>">
                                                                     <i class="fas fa-eye me-1"></i>Preview
@@ -444,7 +447,7 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                                
+
                                             <?php endforeach; ?>
                                         </div>
                                     </div>
@@ -491,7 +494,7 @@
                                     </div>
                                 <?php endif ?>
 
-                                <?php if ($document['approval_status'] === 'sent_for_review' && ( ($role_name === 'reviewer' && $document['reviewer_id'] == session()->get('user_id')) || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
+                                <?php if ($document['approval_status'] === 'sent_for_review' && (($role_name === 'reviewer' && $document['reviewer_id'] == session()->get('user_id')) || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
                                     <div class="d-grid gap-2 mb-3">
                                         <button class="btn btn-success btn-sm" data-bs-toggle="modal"
                                             data-bs-target="#reviewModal">
@@ -500,11 +503,11 @@
                                     </div>
                                 <?php endif ?>
 
-                                <?php if ($document['approval_status'] === 'sent_for_approval' && ( 
-                                        ($role_name === 'approver' && (empty($document['approver_id']) || $document['approver_id'] == session()->get('user_id'))) 
-                                        || $role_name === 'lab_manager' 
-                                        || $role_name === 'superadmin'
-                                    )): ?>
+                                <?php if ($document['approval_status'] === 'sent_for_approval' && (
+                                    ($role_name === 'approver' && (empty($document['approver_id']) || $document['approver_id'] == session()->get('user_id')))
+                                    || $role_name === 'lab_manager'
+                                    || $role_name === 'superadmin'
+                                )): ?>
                                     <div class="d-grid gap-2 mb-3">
                                         <button class="btn btn-success btn-sm" data-bs-toggle="modal"
                                             data-bs-target="#approvalModal">
@@ -666,15 +669,15 @@
                                             <div class="d-grid gap-2">
                                                 <?php if ($role_name === 'reviewer' && $document['reviewer_id'] == session()->get('user_id')): ?>
                                                     <button type="button" class="btn btn-success"
-                                                            onclick="setReviewAction('approve_for_final')">
+                                                        onclick="setReviewAction('approve_for_final')">
                                                         <i class="fas fa-check me-2"></i>Approve
                                                     </button>
                                                     <button type="button" class="btn btn-warning"
-                                                            onclick="setReviewAction('return_for_revision')">
+                                                        onclick="setReviewAction('return_for_revision')">
                                                         <i class="fas fa-undo me-2"></i>Return for Revision
                                                     </button>
                                                     <button type="button" class="btn btn-danger"
-                                                            onclick="setReviewAction('reject')">
+                                                        onclick="setReviewAction('reject')">
                                                         <i class="fas fa-times me-2"></i>Reject Document
                                                     </button>
                                                 <?php else: ?>
@@ -720,27 +723,27 @@
                                         <div class="mb-3">
                                             <label class="form-label">Select Action:</label>
                                             <?php if ((($role_name === 'approver' && (empty($document['approver_id']) || $document['approver_id'] == session()->get('user_id'))) || $role_name === 'lab_manager' || $role_name === 'superadmin')): ?>
-                                            <div class="d-grid gap-2">
-                                                <button type="button" class="btn btn-success"
-                                                    onclick="setApprovalAction('approve')">
-                                                    <i class="fas fa-check-circle me-2"></i>Approve
-                                                </button>
-                                                <button type="button" class="btn btn-warning"
-                                                    onclick="setApprovalAction('return_for_revision')">
-                                                    <i class="fas fa-undo me-2"></i>Return for Revision
-                                                </button>
-                                                <button type="button" class="btn btn-danger"
-                                                    onclick="setApprovalAction('reject')">
-                                                    <i class="fas fa-times-circle me-2"></i>Reject
-                                                </button>
-                                            </div>
-                                        <?php else: ?>
-                                            <div class="d-grid gap-2">
-                                                <button type="button" class="btn btn-secondary" disabled title="Not assigned approver">
-                                                    <i class="fas fa-lock me-2"></i>Approval Actions Unavailable
-                                                </button>
-                                            </div>
-                                        <?php endif; ?>
+                                                <div class="d-grid gap-2">
+                                                    <button type="button" class="btn btn-success"
+                                                        onclick="setApprovalAction('approve')">
+                                                        <i class="fas fa-check-circle me-2"></i>Approve
+                                                    </button>
+                                                    <button type="button" class="btn btn-warning"
+                                                        onclick="setApprovalAction('return_for_revision')">
+                                                        <i class="fas fa-undo me-2"></i>Return for Revision
+                                                    </button>
+                                                    <button type="button" class="btn btn-danger"
+                                                        onclick="setApprovalAction('reject')">
+                                                        <i class="fas fa-times-circle me-2"></i>Reject
+                                                    </button>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="d-grid gap-2">
+                                                    <button type="button" class="btn btn-secondary" disabled title="Not assigned approver">
+                                                        <i class="fas fa-lock me-2"></i>Approval Actions Unavailable
+                                                    </button>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
                                         <div id="approval-action-section" style="display: none;">
                                             <hr>
@@ -1323,69 +1326,69 @@
         function deleteAttachment(attachmentId) {
             if (confirm('Are you sure you want to delete this attachment?')) {
                 fetch('<?= base_url('attachments/delete') ?>/' + attachmentId, {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert(data.message || 'Error deleting attachment');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while deleting the attachment');
-                });
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert(data.message || 'Error deleting attachment');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the attachment');
+                    });
             }
         }
     </script>
-    
+
     <!-- Attachment Modals -->
     <?php if (!empty($attachments)): ?>
         <?php foreach ($attachments as $attachment): ?>
-            <?php 
+            <?php
             $ext = strtolower(pathinfo($attachment['file_path'], PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])): 
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])):
             ?>
-            <!-- Image Modal -->
-            <div class="modal fade" id="imageModal<?= $attachment['id'] ?>" tabindex="-1">
-                <div class="modal-dialog modal-lg modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title"><?= esc($attachment['file_name']) ?></h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body text-center p-0">
-                            <img src="<?= base_url($attachment['file_path']) ?>" class="img-fluid" alt="<?= esc($attachment['file_name']) ?>">
+                <!-- Image Modal -->
+                <div class="modal fade" id="imageModal<?= $attachment['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title"><?= esc($attachment['file_name']) ?></h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body text-center p-0">
+                                <img src="<?= base_url($attachment['file_path']) ?>" class="img-fluid" alt="<?= esc($attachment['file_name']) ?>">
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             <?php elseif ($ext === 'pdf'): ?>
-            <!-- PDF Modal -->
-            <div class="modal fade" id="pdfModal<?= $attachment['id'] ?>" tabindex="-1">
-                <div class="modal-dialog modal-xl modal-dialog-centered" style="height: 90vh;">
-                    <div class="modal-content h-100">
-                        <div class="modal-header">
-                            <h5 class="modal-title"><?= esc($attachment['file_name']) ?></h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body p-0 h-100">
-                            <object data="<?= base_url($attachment['file_path']) ?>" type="application/pdf" width="100%" height="100%" style="min-height: 75vh;">
-                                <iframe src="<?= base_url($attachment['file_path']) ?>" width="100%" height="100%" style="border: none; min-height: 75vh;">
-                                    <p>Your browser does not support PDFs. 
-                                        <a href="<?= base_url($attachment['file_path']) ?>" target="_blank">Download the PDF</a>.
-                                    </p>
-                                </iframe>
-                            </object>
+                <!-- PDF Modal -->
+                <div class="modal fade" id="pdfModal<?= $attachment['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-xl modal-dialog-centered" style="height: 90vh;">
+                        <div class="modal-content h-100">
+                            <div class="modal-header">
+                                <h5 class="modal-title"><?= esc($attachment['file_name']) ?></h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body p-0 h-100">
+                                <object data="<?= base_url($attachment['file_path']) ?>" type="application/pdf" width="100%" height="100%" style="min-height: 75vh;">
+                                    <iframe src="<?= base_url($attachment['file_path']) ?>" width="100%" height="100%" style="border: none; min-height: 75vh;">
+                                        <p>Your browser does not support PDFs.
+                                            <a href="<?= base_url($attachment['file_path']) ?>" target="_blank">Download the PDF</a>.
+                                        </p>
+                                    </iframe>
+                                </object>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             <?php endif; ?>
         <?php endforeach; ?>
     <?php endif; ?>
